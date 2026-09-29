@@ -22,7 +22,12 @@ jobs:
       - name: Set image tag in manifests
         working-directory: manifests
         run: |
-          kustomize edit set image ghcr.io/${{ github.repository }}=ghcr.io/${{ github.repository }}:release-${{ github.ref_name }}
+          # ghcr.io requires a lowercase repository path (OCI spec); GitHub's
+          # own repository name preserves case, so lowercase it explicitly —
+          # docker/metadata-action (build.yml) does this automatically, but
+          # kustomize's raw string substitution here does not.
+          repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          kustomize edit set image "ghcr.io/${repo}=ghcr.io/${repo}:release-${{ github.ref_name }}"
 
       - name: Build install.yaml
         run: kustomize build ./manifests > install.yaml
