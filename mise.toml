@@ -1,0 +1,95 @@
+[tools]
+go = "1.26.1"
+air = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+
+[env]
+# Matches docker-compose.yml's dev-only Postgres credentials. Only used by
+# `mise run dev`/`ci-test`; production sets DATABASE_URL itself.
+DATABASE_URL = "postgres://glidepath:glidepath@127.0.0.1:5432/glidepath?sslmode=disable"
+# db-test service (docker-compose.yml) — isolated DB for
+# `mise run test-integration`, never touched by manual `mise run dev` use.
+TEST_DATABASE_URL = "postgres://glidepath:glidepath@127.0.0.1:15432/glidepath?sslmode=disable"
+
+[tasks.dev]
+run = """
+  mise run db-up &&
+  air
+"""
+
+[tasks.db-up]
+run = """
+  go run ./tools/devdb up &&
+  mise run db-migrate
+"""
+
+[tasks.db-down]
+run = "go run ./tools/devdb down"
+
+[tasks.db-reset]
+run = """
+  go run ./tools/devdb reset &&
+  mise run db-migrate
+"""
+
+[tasks.db-migrate]
+run = "go run github.com/pressly/goose/v3/cmd/goose -dir internal/database/migrations postgres \"$DATABASE_URL\" up"
+
+[tasks.test-db-up]
+run = "go run ./tools/devdb up db-test"
+
+[tasks.test-db-down]
+run = "go run ./tools/devdb down db-test"
+
+[tasks.test-db-reset]
+run = "go run ./tools/devdb reset db-test"
+
+[tasks.test-integration]
+run = """
+  mise run test-db-reset &&
+  go run github.com/pressly/goose/v3/cmd/goose -dir internal/database/migrations postgres "$TEST_DATABASE_URL" up &&
+  DATABASE_URL="$TEST_DATABASE_URL" go test -tags=integration ./...
+"""
+
+[tasks.generate]
+run = "go generate ./internal/database/"
+
+[tasks.format]
+run = """
+  gofmt -l -w .
+  goimports -w .
+"""
+
+[tasks.test]
+run = "go test ./..."
+
+[tasks.pre-merge]
+run = """
+  mise run generate &&
+  mise run format &&
+  mise run ci
+"""
+
+[tasks.ci]
+run = """
+  mise run ci-install &&
+  mise run ci-fmt &&
+  mise run ci-lint &&
+  mise run ci-test &&
+  mise run ci-build
+"""
+
+[tasks.ci-install]
+run = "go mod download"
+
+[tasks.ci-fmt]
+run = "test -z \"$(gofmt -l .)\""
+
+[tasks.ci-lint]
+run = "go vet ./..."
+
+[tasks.ci-test]
+run = "go test ./..."
+
+[tasks.ci-build]
+run = "go build ./..."

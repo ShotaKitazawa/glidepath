@@ -1,0 +1,6 @@
+/tmp/
+/bin/
+*.out
+install.yaml
+.DS_Store
+.mcp.json

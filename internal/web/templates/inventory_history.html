@@ -1,0 +1,23 @@
+{{define "content"}}
+<h1>実績</h1>
+<p class="muted">過去に保存した月次の記録です。直したい月があれば「編集」から開いてください。</p>
+
+{{if .Records}}
+<table>
+  <thead><tr><th>月</th><th>月収（円）</th><th>口座残高（円）</th><th>支出合計（円）</th><th></th></tr></thead>
+  <tbody>
+    {{range .Records}}
+    <tr>
+      <td>{{.Month}}</td>
+      <td>{{yen .IncomeThousandYen}}</td>
+      <td>{{yen .BankBalance}}</td>
+      <td>{{yen .ExpenseTotal}}</td>
+      <td><a href="/inventory?month={{.Month}}">編集</a></td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">まだ実績がありません。</p>
+{{end}}
+{{end}}

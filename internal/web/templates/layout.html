@@ -1,0 +1,141 @@
+{{define "base"}}
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} - Glidepath</title>
+  <style>
+    /* GitHub Primer Darkのトークンを踏襲（黒すぎず境界線もはっきり見える、
+       アクセシビリティ検証済みの実績あるダークパレット）。差し色のみteal。 */
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --bg-elevated: #161b22;
+      --bg-elevated-2: #262d36;
+      --border: #5c636b;
+      --border-muted: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #2dd4bf;
+      --accent-hover: #5eead4;
+      --accent-contrast: #04211d;
+      --danger: #f85149;
+      --danger-hover: #ff7b72;
+      --danger-contrast: #2a0a0a;
+      --success-bg: #0f2d1d;
+      --success-text: #56d364;
+      --error-bg: #3d1418;
+      --error-text: #ff9492;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+      max-width: 960px; margin: 0 auto; padding: 1rem 1rem 3rem; line-height: 1.6;
+      background: var(--bg); color: var(--text);
+    }
+    a { color: var(--accent); }
+    a:hover { color: var(--accent-hover); }
+    h1, h2, h3 { color: var(--text); }
+    h2 { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+    .settings-section {
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.25rem 1.5rem; margin: 2rem 0;
+    }
+    .settings-section h2 { margin-top: 0; padding-top: 0; border-top: none; }
+    nav { display: flex; gap: 1.25rem; margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    nav a { text-decoration: none; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-muted); }
+    thead th { background: var(--bg-elevated-2); color: var(--text-muted); font-weight: 600; font-size: 0.85rem; }
+    tbody tr:hover { background: var(--bg-elevated-2); }
+    form.stacked label { display: block; margin: 0.6rem 0 0.2rem; font-size: 0.9rem; color: var(--text-muted); }
+    form.stacked input, form.stacked select {
+      width: 100%; max-width: 320px; padding: 0.5rem 0.6rem; box-sizing: border-box;
+      background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    }
+    form.stacked input:focus, form.stacked select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    fieldset { margin: 1rem 0; border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem 1rem; background: var(--bg-elevated); }
+    legend { padding: 0 0.4rem; color: var(--text-muted); }
+    .actions { margin-top: 1.2rem; }
+    button {
+      font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg-elevated-2); color: var(--text); padding: 0.5rem 0.9rem;
+    }
+    button:hover { border-color: var(--text-muted); }
+    button.primary, form.stacked button[type="submit"] {
+      background: var(--accent); color: var(--accent-contrast); border-color: var(--accent);
+      font-weight: 700; padding: 0.7rem 1.4rem; font-size: 1rem;
+    }
+    button.primary:hover, form.stacked button[type="submit"]:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+    button.danger:hover { background: var(--danger); color: var(--danger-contrast); border-color: var(--danger); }
+    button:disabled, button:disabled:hover {
+      background: var(--bg-elevated-2); color: var(--text-muted); border-color: var(--border-muted);
+      cursor: not-allowed;
+    }
+    .flash { padding: 0.7rem 1rem; border-radius: 6px; margin-bottom: 1rem; border: 1px solid transparent; }
+    .flash-error { background: var(--error-bg); color: var(--error-text); border-color: #6e2426; }
+    .flash-ok { background: var(--success-bg); color: var(--success-text); border-color: #1c5c34; }
+    .muted { color: var(--text-muted); font-size: 0.9rem; }
+    .guidance { padding: 1.5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elevated); }
+    .quick-fill { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.4rem 0 0.6rem; }
+    .quick-fill button { font-size: 0.85rem; padding: 0.3rem 0.6rem; }
+    .expense-item { display: flex; gap: 0.4rem; margin: 0.3rem 0; align-items: center; }
+    .expense-item input[type="text"] { max-width: 140px; }
+    .expense-item input[type="number"] { max-width: 100px; }
+    .expense-item .remove-expense-item { flex-shrink: 0; padding: 0.3rem 0.5rem; }
+    .expense-item .drag-handle {
+      flex-shrink: 0; padding: 0.3rem 0.5rem; cursor: grab; touch-action: none;
+      color: var(--text-muted); font-size: 1.1rem; background: transparent; border-color: transparent;
+    }
+    .expense-item .drag-handle:hover { border-color: var(--border); }
+    .sortable-ghost { opacity: 0.4; }
+    .sortable-chosen { background: var(--bg-elevated-2); border-radius: 6px; }
+    .field-unit { display: flex; align-items: center; gap: 0.5rem; max-width: 320px; }
+    .field-unit input { max-width: none; flex: 1 1 auto; min-width: 0; }
+    .unit { color: var(--text-muted); font-size: 0.9rem; white-space: nowrap; }
+    .field-hint { margin: 0.2rem 0 0.6rem; font-size: 0.8rem; max-width: 320px; }
+    h3 a.muted { text-decoration: none; font-size: 0.85em; }
+    .fund-list {
+      background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.3rem 1rem; margin: 1.25rem 0 0;
+    }
+    .fund-card { padding: 0.9rem 0; border-top: 1px solid var(--border-muted); }
+    .fund-card:first-of-type { border-top: none; }
+    .fund-card h3 { margin: 0 0 0.3rem; }
+    .fund-actions-primary { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.5rem; }
+    .fund-initial-holding {
+      display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+      margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--border-muted);
+    }
+    .fund-info {
+      display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.7rem;
+      margin: 0.3rem 0 0.6rem; font-size: 0.9rem;
+    }
+    .fund-info dt { color: var(--text-muted); }
+    .fund-info dd { margin: 0; }
+    .info-toggle { position: relative; display: inline-block; cursor: help; }
+    .info-icon { font-size: 0.85em; }
+    .info-popover {
+      display: none; position: absolute; left: 0; top: 1.5em; z-index: 10;
+      background: var(--bg-elevated-2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0.4rem 0.6rem; font-size: 0.8rem; width: max-content; max-width: 260px; color: var(--text);
+    }
+    @media (hover: hover) {
+      .info-toggle:hover .info-popover { display: block; }
+    }
+    .info-toggle:focus .info-popover { display: block; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">見通し</a>
+    <a href="/inventory">今月の記録</a>
+    <a href="/inventory/history">実績</a>
+    <a href="/assumptions">設定</a>
+  </nav>
+  <main>{{template "content" .}}</main>
+</body>
+</html>
+{{end}}

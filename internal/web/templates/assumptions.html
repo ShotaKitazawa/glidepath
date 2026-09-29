@@ -1,0 +1,312 @@
+{{define "content"}}
+<h1>設定</h1>
+<p class="muted">見通しの計算に使う入力です。ふだんは編集しません — 家族が増えた、車を買い替えた、NISAを始めた、口座が増えた、といった時だけここに来てください。</p>
+
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+<section class="settings-section">
+<h2>家族・教育費</h2>
+<p class="muted">家族を追加すると、文部科学省統計ベースの教育費デフォルト値が自動生成されます。実額が判明したら上書きしてください。</p>
+
+<form class="stacked" method="post" action="/family">
+  <label for="relation">続柄</label>
+  <input type="text" id="relation" name="relation" placeholder="子" data-1p-ignore required>
+
+  <label for="birth_month">生年月</label>
+  <input type="month" id="birth_month" name="birth_month" required>
+
+  <label for="track_pattern">進学コース（幼稚園〜高校）</label>
+  <select id="track_pattern" name="track_pattern">
+    <option value="all_public">すべて公立</option>
+    <option value="private_from_jhs">小学校まで公立</option>
+    <option value="private_from_hs">中学校まで公立</option>
+    <option value="all_private">すべて私立</option>
+  </select>
+
+  <label for="university_track">進学コース（大学）</label>
+  <select id="university_track" name="university_track">
+    <option value="国公立">国公立</option>
+    <option value="私立文系">私立文系</option>
+    <option value="私立理系">私立理系</option>
+  </select>
+
+  <div class="actions">
+    <button type="submit" class="primary">追加</button>
+  </div>
+</form>
+
+{{range .Members}}
+<h3>{{.Relation}}（{{.Birth}}生まれ）</h3>
+<form method="post" action="/family/members/{{.ID}}/delete" style="display:inline">
+  <button type="submit" class="danger">この家族を削除</button>
+</form>
+<table>
+  <thead><tr><th>段階</th><th>コース</th><th>対象年齢</th><th>年額（円）</th><th>上書き</th><th></th></tr></thead>
+  <tbody>
+    {{range .Forecasts}}
+    <tr>
+      <td>{{.Stage}}</td>
+      <td>{{.Track}}</td>
+      <td>{{.StartAge}}〜{{.EndAge}}歳</td>
+      <td>{{yen .AnnualCost}}</td>
+      <td>{{if .IsOverride}}実額{{else}}デフォルト{{end}}</td>
+      <td>
+        <form method="post" action="/family/forecasts/{{.ID}}" style="display:flex; gap:0.4rem; align-items:center;">
+          <input type="number" name="annual_cost" min="0" value="{{.AnnualCost}}" style="width:8rem">
+          <span class="unit">千円</span>
+          <button type="submit" class="primary">更新</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">まだ家族が登録されていません。</p>
+{{end}}
+
+</section>
+
+<section class="settings-section">
+<h2>周期的大型出費</h2>
+<p class="muted">車の買い替え・住宅の外壁や屋根の修繕・給湯器やエアコンなど大型家電の買い替えなど、
+周期的に発生する大型出費を登録します。値上がり分は登録時には聞かず、まずは「値上がりなし」で
+計算します。次に買い替える時点でどれくらい高くなっていそうか見積もりがあれば、登録後に
+一覧の「値上がり率」欄から設定してください（分からなければ空欄のままで構いません）。</p>
+
+<form class="stacked" id="big-purchase-form" method="post"
+      action="{{if .EditingPurchase}}/big-purchases/{{.EditingPurchase.ID}}{{else}}/big-purchases{{end}}">
+  <label for="purchase_name">名称</label>
+  <input type="text" id="purchase_name" name="purchase_name" autocomplete="off" data-1p-ignore placeholder="車の買い替え"
+         value="{{if .EditingPurchase}}{{.EditingPurchase.Name}}{{end}}" required>
+
+  <label for="base_amount">基準金額</label>
+  <div class="field-unit">
+    <input type="number" id="base_amount" name="base_amount" min="0"
+           value="{{if .EditingPurchase}}{{.EditingPurchase.BaseAmount}}{{end}}" required>
+    <span class="unit">千円</span>
+  </div>
+
+  <label for="base_date">基準月</label>
+  <input type="month" id="base_date" name="base_date" value="{{if .EditingPurchase}}{{.EditingPurchase.BaseDate}}{{end}}" required>
+
+  <label for="cycle_years">周期</label>
+  <div class="field-unit">
+    <input type="number" id="cycle_years" name="cycle_years" min="0"
+           value="{{if .EditingPurchase}}{{.EditingPurchase.CycleYears}}{{else}}0{{end}}">
+    <span class="unit">年</span>
+  </div>
+
+  <label for="trade_in_value">下取り額</label>
+  <div class="field-unit">
+    <input type="number" id="trade_in_value" name="trade_in_value" min="0"
+           value="{{if .EditingPurchase}}{{.EditingPurchase.TradeInValue}}{{else}}0{{end}}">
+    <span class="unit">千円</span>
+  </div>
+
+  <label for="financing_mode">支払い方法</label>
+  <select id="financing_mode" name="financing_mode">
+    <option value="cash" {{if and .EditingPurchase (eq .EditingPurchase.FinancingMode "cash")}}selected{{end}}>現金</option>
+    <option value="loan_if_favorable" {{if and .EditingPurchase (eq .EditingPurchase.FinancingMode "loan_if_favorable")}}selected{{end}}>ローン（有利な場合）</option>
+  </select>
+
+  <label><input type="checkbox" name="recurring" style="width:auto"
+         {{if .EditingPurchase}}{{if .EditingPurchase.Recurring}}checked{{end}}{{else}}checked{{end}}> 周期的に繰り返す</label>
+
+  <div class="actions">
+    <button type="submit" class="primary">{{if .EditingPurchase}}更新{{else}}追加{{end}}</button>
+    {{if .EditingPurchase}} <a href="/assumptions#big-purchase-form">編集をキャンセル</a>{{end}}
+  </div>
+</form>
+
+{{if .Purchases}}
+<table>
+  <thead><tr><th>名称</th><th>基準金額（円）</th><th>基準月</th><th>周期</th><th>値上がり率</th><th>下取り額（円）</th><th>支払い</th><th>繰り返し</th><th></th></tr></thead>
+  <tbody>
+    {{range .Purchases}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>{{yen .BaseAmount}}</td>
+      <td>{{.BaseDate}}</td>
+      <td>{{.CycleYears}}年</td>
+      <td>
+        <form method="post" action="/big-purchases/{{.ID}}/growth-rate" style="display:flex; gap:0.3rem; align-items:center;">
+          <input type="text" name="category_growth_rate" value="{{.GrowthRate}}" placeholder="例: 0.1" style="width:5rem">
+          <button type="submit" class="primary">更新</button>
+        </form>
+      </td>
+      <td>{{yen .TradeInValue}}</td>
+      <td>{{.FinancingMode}}</td>
+      <td>{{if .Recurring}}○{{else}}-{{end}}</td>
+      <td style="white-space:nowrap;">
+        <a href="/assumptions?edit_big_purchase={{.ID}}#big-purchase-form">編集</a>
+        <form method="post" action="/big-purchases/{{.ID}}/delete" style="display:inline">
+          <button type="submit" class="danger">削除</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">まだ登録されていません。</p>
+{{end}}
+
+</section>
+
+<section class="settings-section">
+<h2>NISAファンド</h2>
+<p class="muted">基準価額はMUFGファンド情報API（developer.am.mufg.jp）から取得します。個人利用で
+ファンドが増えることは稀なので、MUFGのファンドページURLだけ貼れば足りるようにしています —
+分かればファンド名・コードを自動で埋めます。NISA拠出そのものの記録は毎月「今月の記録」で
+行います。ここではファンドの登録と基準価額の同期のみを扱います。</p>
+
+<form class="stacked" method="post" action="/funds">
+  <label for="fund_name">ファンド名</label>
+  <input type="text" id="fund_name" name="fund_name" autocomplete="off" data-1p-ignore placeholder="eMAXIS Slim 米国株式（S&P500）" required>
+
+  <label for="fund_nav_proxy">値動きの参照先（任意）</label>
+  <select id="fund_nav_proxy" name="nav_proxy_fund_id">
+    <option value="">参照しない（下のURL/コードで自分の基準価額を同期する）</option>
+    {{range .Funds}}{{if not .NavProxyFundName}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+  </select>
+  <p class="field-hint muted">運用会社が公開APIを提供していないファンドは、同じ指数に連動する別の登録済み
+  ファンドの値動きを代わりに使えます（信託報酬差程度の誤差は出ます。SPEC.md 4.1参照）。</p>
+
+  <div id="fund-own-nav-fields">
+    <label for="fund_nav_source_url">MUFGのファンドページURL</label>
+    <input type="text" id="fund_nav_source_url" name="nav_source_url" autocomplete="off" placeholder="https://www.am.mufg.jp/fund/253266.html">
+
+    <label for="fund_code">MUFGファンドコード（URLから自動入力されない場合のみ）</label>
+    <input type="text" id="fund_code" name="fund_code" autocomplete="off" placeholder="253266">
+  </div>
+
+  <div class="actions">
+    <button type="submit" class="primary">追加</button>
+  </div>
+</form>
+
+<script>
+(function () {
+  // URLからコードを読み取って既知ファンドのテーブルを引き、コードを自動で埋める。
+  var KNOWN_FUNDS_BY_CODE = {
+    "253266": "eMAXIS Slim 米国株式（S&P500）",
+  };
+  var urlInput = document.getElementById("fund_nav_source_url");
+  var nameInput = document.getElementById("fund_name");
+  var codeInput = document.getElementById("fund_code");
+  urlInput.addEventListener("input", function () {
+    var m = urlInput.value.match(/\/fund\/(\d+)/);
+    if (!m) return;
+    var code = m[1];
+    if (!codeInput.value) codeInput.value = code;
+    var knownName = KNOWN_FUNDS_BY_CODE[code];
+    if (knownName && !nameInput.value) nameInput.value = knownName;
+  });
+
+  // 参照先を選んだら、自前の基準価額同期用欄は無関係になるので隠す。
+  var proxySelect = document.getElementById("fund_nav_proxy");
+  var ownNavFields = document.getElementById("fund-own-nav-fields");
+  function updateOwnNavFieldsVisibility() {
+    ownNavFields.hidden = proxySelect.value !== "";
+  }
+  proxySelect.addEventListener("change", updateOwnNavFieldsVisibility);
+  updateOwnNavFieldsVisibility();
+})();
+</script>
+
+{{if .Funds}}
+<div class="fund-list">
+{{range .Funds}}
+<div class="fund-card">
+<h3>{{.Name}}{{if .NavSourceURL}} <a href="{{.NavSourceURL}}" target="_blank" rel="noopener" class="muted" title="{{.NavSourceURL}}">🔗</a>{{end}} <span class="info-toggle" tabindex="0"><span class="info-icon muted" aria-hidden="true">ⓘ</span><span class="info-popover">{{if .NavProxyFundName}}値動き参照先: {{.NavProxyFundName}}{{else}}コード: {{if .FundCode}}{{.FundCode}}{{else}}未設定{{end}}{{end}}</span></span></h3>
+<dl class="fund-info">
+  <dt>最新基準価額</dt><dd>{{if .LatestNAVDate}}{{yenRaw .LatestNAVYen}}円（{{.LatestNAVDate}}時点、1万口あたり）{{else}}未取得{{end}}</dd>
+  <dt>累計拠出額</dt><dd>{{yen .TotalContribThousandYen}}円</dd>
+</dl>
+
+<div class="fund-actions-primary">
+  {{if .NavProxyFundName}}
+  <span title="このファンドは他のファンドの値動きを参照する設定になっており、基準価額の同期は不要です">
+    <button type="button" class="primary" disabled>基準価額を同期</button>
+  </span>
+  {{else}}
+  <form method="post" action="/funds/{{.ID}}/sync-nav" style="display:inline">
+    <button type="submit" class="primary">基準価額を同期</button>
+  </form>
+  {{end}}
+  <form method="post" action="/funds/{{.ID}}/delete" style="display:inline" class="fund-delete-form"
+        data-contrib="{{yen .TotalContribThousandYen}}円" data-nav-count="{{.NavHistoryCount}}">
+    <button type="submit" class="danger">削除</button>
+  </form>
+</div>
+
+<form method="post" action="/funds/{{.ID}}/initial-holding" class="fund-initial-holding">
+  <input type="date" name="as_of_date" required style="width:8rem">
+  <input type="number" name="amount" min="0" placeholder="評価額" style="width:5rem">
+  <span class="unit">千円</span>
+  <button type="submit" class="primary" title="このアプリで記録を始める前から保有していた分を、指定日の一括拠出として遡って記録します（その日までの基準価額履歴が必要です）">記録</button>
+</form>
+</div>
+{{end}}
+</div>
+{{else}}
+<p class="muted">まだファンドが登録されていません。</p>
+{{end}}
+
+<script>
+(function () {
+  // ファンド削除は基準価額履歴・NISA拠出実績を連動して消す（ON DELETE CASCADE）。
+  // 拠出実績は「今月の記録」で積み上げた実データであり、設定の他の項目と違って
+  // 失うと入力し直せないため、削除前に具体的な件数・金額を見せて確認を取る。
+  document.querySelectorAll(".fund-delete-form").forEach(function (form) {
+    form.addEventListener("submit", function (e) {
+      var contrib = form.dataset.contrib;
+      var navCount = form.dataset.navCount;
+      var msg = "このファンドを削除すると、基準価額履歴（" + navCount + "件）と" +
+        "これまでのNISA拠出実績（累計" + contrib + "）も一緒に削除されます。元に戻せません。削除しますか？";
+      if (!confirm(msg)) {
+        e.preventDefault();
+      }
+    });
+  });
+})();
+</script>
+
+</section>
+
+<section class="settings-section">
+<h2>口座</h2>
+<p class="muted">個人口座・共用口座など、毎月残高を入力する口座を登録します。登録すると「今月の記録」で口座ごとに残高を入力できるようになります。</p>
+
+<form class="stacked" method="post" action="/bank-accounts">
+  <label for="account_name">口座名</label>
+  <input type="text" id="account_name" name="account_name" autocomplete="off" data-1p-ignore placeholder="個人口座" required>
+
+  <div class="actions">
+    <button type="submit" class="primary">追加</button>
+  </div>
+</form>
+
+{{if .BankAccounts}}
+<table>
+  <thead><tr><th>口座名</th><th>最新残高（円）</th><th></th></tr></thead>
+  <tbody>
+    {{range .BankAccounts}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>{{if .HasLatestBalance}}{{yen .LatestBalanceThousandYen}}{{else}}未入力{{end}}</td>
+      <td>
+        <form method="post" action="/bank-accounts/{{.ID}}/delete">
+          <button type="submit" class="danger">削除</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">まだ口座が登録されていません。</p>
+{{end}}
+</section>
+{{end}}

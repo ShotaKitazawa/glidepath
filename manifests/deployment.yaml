@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glidepath
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glidepath
+  template:
+    metadata:
+      labels:
+        app: glidepath
+    spec:
+      containers:
+        - name: glidepath
+          image: ghcr.io/ShotaKitazawa/glidepath
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: glidepath-secrets
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080

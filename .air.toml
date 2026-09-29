@@ -1,0 +1,11 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/glidepath ./cmd/server"
+entrypoint = ["./tmp/glidepath", "--disable-oidc"]
+include_ext = ["go", "html"]
+exclude_dir = ["tmp", "hack", "tools"]
+
+[misc]
+clean_on_exit = true

@@ -1,0 +1,174 @@
+{{define "content"}}
+<h1>今月の記録</h1>
+{{if .IsEditing}}
+<p class="muted">{{.DefaultMonth}}の記録を編集しています（<a href="/inventory/history">他の月を見る</a>）。</p>
+{{else}}
+<p class="muted">毎月の収入・支出内訳・口座残高・NISA拠出を記録します。入力欄は千円単位、合計などの表示は円単位です。</p>
+{{end}}
+
+{{if .Success}}<div class="flash flash-ok">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+<form class="stacked" method="post" action="/inventory">
+  <label for="record_month">対象月</label>
+  <input type="month" id="record_month" name="record_month" value="{{.DefaultMonth}}" required>
+
+  <label for="income_monthly">収入</label>
+  <div class="field-unit">
+    <input type="number" id="income_monthly" name="income_monthly" min="0" value="{{if .IsEditing}}{{.PrefillIncomeThousandYen}}{{end}}" required>
+    <span class="unit">千円</span>
+  </div>
+  {{if .RecentIncomes}}
+  <div class="quick-fill">
+    {{range .RecentIncomes}}
+    <button type="button" class="quick-fill-income" data-income="{{.IncomeThousandYen}}">{{.Month}}と同じ（{{yen .IncomeThousandYen}}円）</button>
+    {{end}}
+  </div>
+  {{end}}
+
+  {{if .BankAccounts}}
+  <fieldset>
+    <legend>口座残高</legend>
+    {{range .BankAccounts}}
+      <label for="account_{{.ID}}">{{.Name}}</label>
+      <div class="field-unit">
+        <input type="number" class="bank-balance-input" id="account_{{.ID}}" name="account_{{.ID}}" min="0" value="{{.PrefillThousandYen}}" required>
+        <span class="unit">千円</span>
+      </div>
+    {{end}}
+    <p class="muted">合計: <span id="bank_balance_sum">0</span>円</p>
+  </fieldset>
+  {{else}}
+  <label for="bank_balance">口座残高 合算</label>
+  <div class="field-unit">
+    <input type="number" id="bank_balance" name="bank_balance" min="0" value="{{if .IsEditing}}{{.PrefillBankBalanceThousandYen}}{{end}}" required>
+    <span class="unit">千円</span>
+  </div>
+  <p class="muted"><a href="/assumptions">設定</a>で口座を登録すると、口座ごとに入力できるようになります。</p>
+  {{end}}
+
+  <label>支出の内訳（ラベルは任意）</label>
+  {{if .PreviousExpenseItems}}
+  <div class="quick-fill">
+    <span class="muted">前回（{{.PreviousExpenseMonth}}）:</span>
+    {{range .PreviousExpenseItems}}
+    <span class="muted">{{.Label}}:{{yen .ThousandYen}}円</span>
+    {{end}}
+  </div>
+  {{end}}
+  <div id="expense-items">
+    {{if .PrefillExpenseItems}}
+      {{range .PrefillExpenseItems}}
+      <div class="expense-item">
+        <button type="button" class="drag-handle" aria-label="並び替え">⠿</button>
+        <input type="text" name="expense_label" placeholder="ラベル(任意)" value="{{.Label}}">
+        <input type="number" name="expense_amount" min="0" class="expense-amount-input" placeholder="金額" value="{{.ThousandYen}}">
+        <span class="unit">千円</span>
+        <button type="button" class="remove-expense-item">×</button>
+      </div>
+      {{end}}
+    {{else}}
+      <div class="expense-item">
+        <button type="button" class="drag-handle" aria-label="並び替え">⠿</button>
+        <input type="text" name="expense_label" placeholder="ラベル(任意)">
+        <input type="number" name="expense_amount" min="0" class="expense-amount-input" placeholder="金額">
+        <span class="unit">千円</span>
+        <button type="button" class="remove-expense-item">×</button>
+      </div>
+    {{end}}
+  </div>
+  <button type="button" id="add-expense-item">+ 項目を追加</button>
+  <p class="muted">合計: <span id="expense_total_sum">0</span>円。ラベルは来月このページで振り返れます（家計簿アプリの内訳データそのものを持つわけではありません）。</p>
+
+  {{if .Funds}}
+  <fieldset>
+    <legend>NISA拠出</legend>
+    {{range .Funds}}
+      <label for="contribution_{{.ID}}">{{.Name}}</label>
+      <div class="field-unit">
+        <input type="number" id="contribution_{{.ID}}" name="contribution_{{.ID}}" min="0" value="{{.PrefillThousandYen}}">
+        <span class="unit">千円</span>
+      </div>
+      <label class="muted"><input type="checkbox" name="contribution_spot_{{.ID}}" style="width:auto" {{if .PrefillIsSpot}}checked{{end}}> 突発的な購入（今後の傾向に含めない）</label>
+    {{end}}
+  </fieldset>
+  {{else}}
+  <p class="muted">NISAファンドが未登録です。拠出を記録したい場合は<a href="/assumptions">設定</a>で先に登録してください。</p>
+  {{end}}
+
+  <div class="actions">
+    <button type="submit" class="primary">保存</button>
+  </div>
+</form>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+(function () {
+  document.querySelectorAll(".quick-fill-income").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.getElementById("income_monthly").value = btn.dataset.income;
+    });
+  });
+
+  // Inputs stay in thousand-yen; totals are shown in yen with commas.
+  var bankBalanceInputs = document.querySelectorAll(".bank-balance-input");
+  var bankBalanceSum = document.getElementById("bank_balance_sum");
+  function updateBankBalanceSum() {
+    var sum = 0;
+    bankBalanceInputs.forEach(function (i) {
+      var n = parseFloat(i.value);
+      if (!isNaN(n)) sum += n;
+    });
+    bankBalanceSum.textContent = (sum * 1000).toLocaleString("ja-JP");
+  }
+  if (bankBalanceSum) {
+    bankBalanceInputs.forEach(function (input) {
+      input.addEventListener("input", updateBankBalanceSum);
+    });
+    updateBankBalanceSum();
+  }
+
+  // Not a single "+"-delimited text field: mistyping ":" or "+" was easy,
+  // and fixing one entry meant retyping the whole string.
+  var expenseTotalSum = document.getElementById("expense_total_sum");
+  function updateExpenseTotalSum() {
+    var sum = 0;
+    document.querySelectorAll(".expense-amount-input").forEach(function (i) {
+      var n = parseFloat(i.value);
+      if (!isNaN(n)) sum += n;
+    });
+    expenseTotalSum.textContent = (sum * 1000).toLocaleString("ja-JP");
+  }
+  // Reordering uses SortableJS rather than a hand-rolled implementation:
+  // the HTML5 Drag and Drop API has no native touch support, and an
+  // earlier from-scratch Pointer Events version felt janky on touch
+  // (no momentum/animation, no edge auto-scroll). SortableJS is the
+  // de-facto standard for touch-friendly list reordering.
+  Sortable.create(document.getElementById("expense-items"), {
+    handle: ".drag-handle",
+    animation: 150,
+  });
+  function bindExpenseRow(row) {
+    row.querySelector(".expense-amount-input").addEventListener("input", updateExpenseTotalSum);
+    row.querySelector(".remove-expense-item").addEventListener("click", function () {
+      row.remove();
+      updateExpenseTotalSum();
+    });
+  }
+  document.querySelectorAll("#expense-items .expense-item").forEach(bindExpenseRow);
+  document.getElementById("add-expense-item").addEventListener("click", function () {
+    var row = document.createElement("div");
+    row.className = "expense-item";
+    row.innerHTML =
+      '<button type="button" class="drag-handle" aria-label="並び替え">⠿</button>' +
+      '<input type="text" name="expense_label" placeholder="ラベル(任意)">' +
+      '<input type="number" name="expense_amount" min="0" class="expense-amount-input" placeholder="金額">' +
+      '<span class="unit">千円</span>' +
+      '<button type="button" class="remove-expense-item">×</button>';
+    document.getElementById("expense-items").appendChild(row);
+    bindExpenseRow(row);
+  });
+  updateExpenseTotalSum();
+})();
+</script>
+{{end}}

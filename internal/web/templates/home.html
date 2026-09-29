@@ -1,0 +1,124 @@
+{{define "content"}}
+{{if .Guidance}}
+<h1>見通し</h1>
+<div class="guidance">
+  <p>{{.Guidance}}</p>
+  <p>
+    <a href="/inventory">今月の記録を入力する</a> ・
+    <a href="/assumptions">設定を開く</a>
+  </p>
+</div>
+{{else}}
+<h1>見通し</h1>
+<p class="muted">実績（これまでの記録から計算した実際の資産額）と、予測（2047年3月までの資産推移の幅:
+ベスト(p90)・中央値(p50)・ワースト(p10)）を分けて表示しています。</p>
+
+<canvas id="fan-chart" height="320" aria-label="資産推移ファンチャート" role="img"></canvas>
+
+<table>
+  <thead><tr><th>区分</th><th>年</th><th>p10（ワースト・円）</th><th>p50（中央値・円）</th><th>p90（ベスト・円）</th></tr></thead>
+  <tbody>
+    {{range .ActualPoints}}
+    <tr><td>実績</td><td>{{.Year}}</td><td>{{yen .NetWorthYen}}</td><td>{{yen .NetWorthYen}}</td><td>{{yen .NetWorthYen}}</td></tr>
+    {{end}}
+    {{range .ForecastPoints}}
+    <tr><td>予測</td><td>{{.Year}}</td><td>{{yen .P10}}</td><td>{{yen .P50}}</td><td>{{yen .P90}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var actual = {{.ActualJSON}};
+  var forecast = {{.ForecastJSON}};
+  var ctx = document.getElementById("fan-chart").getContext("2d");
+  var gridColor = "rgba(139,148,158,0.2)";
+  var textColor = "#8b949e";
+
+  var labels = actual.map(function (a) { return a.Year; })
+    .concat(forecast.map(function (f) { return f.Year; }));
+
+  var actualData = actual.map(function (a) { return a.NetWorthYen; })
+    .concat(forecast.map(function () { return null; }));
+
+  // 予測側の各系列は、実績の最後の点と同じ値を実績の最後の年の位置に
+  // 入れておくことで、実績の線からそのまま連続して伸びているように見せる
+  // （実績と予測が別々の宙に浮いた線に見えないようにするため）。
+  var boundaryValue = actual.length ? actual[actual.length - 1].NetWorthYen : null;
+  function forecastSeries(key) {
+    var lead = actual.map(function () { return null; });
+    if (lead.length) lead[lead.length - 1] = boundaryValue;
+    return lead.concat(forecast.map(function (f) { return f[key]; }));
+  }
+
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "実績",
+          data: actualData,
+          borderColor: "#e6edf3",
+          backgroundColor: "#e6edf3",
+          borderWidth: 2,
+          pointRadius: 3,
+          fill: false,
+        },
+        {
+          label: "p90（ベスト・予測）",
+          data: forecastSeries("P90"),
+          borderColor: "rgba(94,234,212,0.8)",
+          backgroundColor: "rgba(94,234,212,0.12)",
+          fill: "+1",
+          pointRadius: 0,
+        },
+        {
+          label: "p50（中央値・予測）",
+          data: forecastSeries("P50"),
+          borderColor: "rgba(96,165,250,0.9)",
+          backgroundColor: "rgba(96,165,250,0.0)",
+          fill: false,
+          pointRadius: 0,
+        },
+        {
+          label: "p10（ワースト・予測）",
+          data: forecastSeries("P10"),
+          borderColor: "rgba(248,113,113,0.7)",
+          backgroundColor: "rgba(248,113,113,0.0)",
+          fill: false,
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      color: textColor,
+      plugins: {
+        legend: { labels: { color: textColor } },
+        tooltip: {
+          callbacks: {
+            label: function (item) {
+              return item.dataset.label + ": " + (item.parsed.y * 1000).toLocaleString("ja-JP") + "円";
+            },
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: textColor }, grid: { color: gridColor } },
+        y: {
+          ticks: {
+            color: textColor,
+            // Data is in thousand-yen units; convert to yen only for display.
+            callback: function (value) { return (value * 1000).toLocaleString("ja-JP") + "円"; },
+          },
+          grid: { color: gridColor },
+        },
+      },
+    },
+  });
+})();
+</script>
+{{end}}
+{{end}}
