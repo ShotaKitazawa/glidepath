@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}} - Glidepath</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0d1117">
   <style>
     /* GitHub Primer Darkのトークンを踏襲（黒すぎず境界線もはっきり見える、
        アクセシビリティ検証済みの実績あるダークパレット）。差し色のみteal。 */
@@ -137,6 +139,11 @@
     <a href="/assumptions">設定</a>
   </nav>
   <main>{{template "content" .}}</main>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js");
+    }
+  </script>
 </body>
 </html>
 {{end}}
