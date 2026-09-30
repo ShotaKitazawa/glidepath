@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/ShotaKitazawa/glidepath/internal/database/sqlcgen"
+	"github.com/ShotaKitazawa/glidepath/internal/web"
 )
 
 // Register wires all routes onto mux.
@@ -17,6 +18,7 @@ import (
 // checked day to day.
 func Register(mux *http.ServeMux, queries *sqlcgen.Queries) {
 	mux.HandleFunc("GET /healthz", healthz)
+	web.RegisterStatic(mux)
 	registerHome(mux, queries)
 	registerInventory(mux, queries)
 	registerAssumptions(mux, queries)
