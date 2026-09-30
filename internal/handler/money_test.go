@@ -6,7 +6,7 @@ func TestToThousandYen(t *testing.T) {
 	cases := []struct {
 		name string
 		yen  int
-		want int32
+		want int64
 	}{
 		{"zero", 0, 0},
 		{"typical amount", 1_915_000, 1915},

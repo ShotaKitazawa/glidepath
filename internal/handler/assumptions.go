@@ -17,10 +17,10 @@ import (
 // form into edit mode for that row (see bigPurchaseUpdate).
 func registerAssumptions(mux *http.ServeMux, q *sqlcgen.Queries) {
 	mux.HandleFunc("GET /assumptions", func(w http.ResponseWriter, r *http.Request) {
-		var editBigPurchaseID int32
+		var editBigPurchaseID int64
 		if s := r.URL.Query().Get("edit_big_purchase"); s != "" {
 			if id, err := strconv.Atoi(s); err == nil {
-				editBigPurchaseID = int32(id)
+				editBigPurchaseID = int64(id)
 			}
 		}
 		renderAssumptions(w, r.Context(), q, "", editBigPurchaseID)
@@ -37,7 +37,7 @@ type assumptionsPageData struct {
 	EditingPurchase *bigPurchaseView
 }
 
-func renderAssumptions(w http.ResponseWriter, ctx context.Context, q *sqlcgen.Queries, errMsg string, editBigPurchaseID int32) {
+func renderAssumptions(w http.ResponseWriter, ctx context.Context, q *sqlcgen.Queries, errMsg string, editBigPurchaseID int64) {
 	members, err := loadFamilyView(ctx, q)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

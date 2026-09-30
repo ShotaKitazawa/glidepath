@@ -13,57 +13,63 @@ import (
 func TestRender_AllPagesParseAndExecute(t *testing.T) {
 	type inventoryRow struct {
 		Month                                        string
-		IncomeThousandYen, BankBalance, ExpenseTotal int32
+		IncomeThousandYen, BankBalance, ExpenseTotal int64
 	}
 	type forecastRow struct {
-		ID, StartAge, EndAge, AnnualCost int32
+		ID, StartAge, EndAge, AnnualCost int64
 		Stage, Track                     string
 		IsOverride                       bool
 	}
 	type familyMember struct {
-		ID        int32
+		ID        int64
 		Relation  string
 		Birth     string
 		Forecasts []forecastRow
 	}
 	type bigPurchase struct {
-		ID, BaseAmount, CycleYears, TradeInValue  int32
+		ID, BaseAmount, CycleYears, TradeInValue  int64
 		Name, BaseDate, GrowthRate, FinancingMode string
 		Recurring                                 bool
 	}
-	type simulationPoint struct{ Year, P10, P50, P90 int32 }
-	type actualPoint struct{ Year, NetWorthYen int32 }
+	type simulationPoint struct {
+		Year          int32
+		P10, P50, P90 int64
+	}
+	type actualPoint struct {
+		Year        int32
+		NetWorthYen int64
+	}
 	type fund struct {
-		ID                                    int32
+		ID                                    int64
 		Name, FundCode, NavSourceURL          string
 		LatestNAVDate                         string
-		LatestNAVYen, TotalContribThousandYen int32
+		LatestNAVYen, TotalContribThousandYen int64
 		NavHistoryCount                       int
 		NavProxyFundName                      string
 	}
 	type fundOption struct {
-		ID                 int32
+		ID                 int64
 		Name               string
-		PrefillThousandYen int32
+		PrefillThousandYen int64
 		PrefillIsSpot      bool
 	}
 	type recentIncome struct {
 		Month             string
-		IncomeThousandYen int32
+		IncomeThousandYen int64
 	}
 	type expenseItemView struct {
 		Label       string
-		ThousandYen int32
+		ThousandYen int64
 	}
 	type bankAccountOption struct {
-		ID                 int32
+		ID                 int64
 		Name               string
-		PrefillThousandYen int32
+		PrefillThousandYen int64
 	}
 	type bankAccount struct {
-		ID                       int32
+		ID                       int64
 		Name                     string
-		LatestBalanceThousandYen int32
+		LatestBalanceThousandYen int64
 		HasLatestBalance         bool
 	}
 
@@ -84,8 +90,8 @@ func TestRender_AllPagesParseAndExecute(t *testing.T) {
 				PreviousExpenseItems          []expenseItemView
 				DefaultMonth                  string
 				IsEditing                     bool
-				PrefillIncomeThousandYen      int32
-				PrefillBankBalanceThousandYen int32
+				PrefillIncomeThousandYen      int64
+				PrefillBankBalanceThousandYen int64
 				PrefillExpenseItems           []expenseItemView
 				Success                       string
 				Error                         string
@@ -118,8 +124,8 @@ func TestRender_AllPagesParseAndExecute(t *testing.T) {
 				PreviousExpenseItems          []expenseItemView
 				DefaultMonth                  string
 				IsEditing                     bool
-				PrefillIncomeThousandYen      int32
-				PrefillBankBalanceThousandYen int32
+				PrefillIncomeThousandYen      int64
+				PrefillBankBalanceThousandYen int64
 				PrefillExpenseItems           []expenseItemView
 				Success                       string
 				Error                         string
@@ -147,8 +153,8 @@ func TestRender_AllPagesParseAndExecute(t *testing.T) {
 				PreviousExpenseItems          []expenseItemView
 				DefaultMonth                  string
 				IsEditing                     bool
-				PrefillIncomeThousandYen      int32
-				PrefillBankBalanceThousandYen int32
+				PrefillIncomeThousandYen      int64
+				PrefillBankBalanceThousandYen int64
 				PrefillExpenseItems           []expenseItemView
 				Success                       string
 				Error                         string

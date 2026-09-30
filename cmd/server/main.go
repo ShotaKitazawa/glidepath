@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -10,7 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "modernc.org/sqlite"
 
 	"github.com/ShotaKitazawa/glidepath/internal/auth"
 	"github.com/ShotaKitazawa/glidepath/internal/config"
@@ -43,13 +44,16 @@ func run(addr string, disableOIDC bool) error {
 		return err
 	}
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	db, err := sql.Open("sqlite", cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connecting to database: %w", err)
 	}
-	defer pool.Close()
+	defer db.Close()
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("enabling foreign keys: %w", err)
+	}
 
-	queries := sqlcgen.New(pool)
+	queries := sqlcgen.New(db)
 
 	mux := http.NewServeMux()
 	handler.Register(mux, queries)

@@ -4,3 +4,7 @@
 install.yaml
 .DS_Store
 .mcp.json
+*.db
+*.db-journal
+*.db-shm
+*.db-wal

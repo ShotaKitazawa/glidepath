@@ -2,12 +2,11 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ShotaKitazawa/glidepath/internal/database/sqlcgen"
 )
@@ -23,13 +22,13 @@ func registerBigPurchases(mux *http.ServeMux, q *sqlcgen.Queries) {
 }
 
 type bigPurchaseView struct {
-	ID            int32
+	ID            int64
 	Name          string
-	BaseAmount    int32
+	BaseAmount    int64
 	BaseDate      string
-	CycleYears    int32
+	CycleYears    int64
 	GrowthRate    string
-	TradeInValue  int32
+	TradeInValue  int64
 	Recurring     bool
 	FinancingMode string
 }
@@ -52,16 +51,13 @@ func loadBigPurchasesView(ctx context.Context, q *sqlcgen.Queries) ([]bigPurchas
 func bigPurchaseRowToView(p sqlcgen.BigPurchase) bigPurchaseView {
 	rate := ""
 	if p.CategoryGrowthRate.Valid {
-		f, err := p.CategoryGrowthRate.Float64Value()
-		if err == nil && f.Valid {
-			rate = strconv.FormatFloat(f.Float64, 'f', -1, 64)
-		}
+		rate = strconv.FormatFloat(p.CategoryGrowthRate.Float64, 'f', -1, 64)
 	}
 	return bigPurchaseView{
 		ID:            p.ID,
 		Name:          p.Name,
 		BaseAmount:    toThousandYen(int(p.BaseAmount)),
-		BaseDate:      p.BaseDate.Time.Format("2006-01"),
+		BaseDate:      p.BaseDate.Format("2006-01"),
 		CycleYears:    p.CycleYears,
 		GrowthRate:    rate,
 		TradeInValue:  toThousandYen(int(p.TradeInValue)),
@@ -134,8 +130,8 @@ func bigPurchaseCreate(q *sqlcgen.Queries) http.HandlerFunc {
 		if _, err := q.CreateBigPurchase(r.Context(), sqlcgen.CreateBigPurchaseParams{
 			Name:          input.Name,
 			BaseAmount:    fromThousandYen(input.BaseAmount),
-			BaseDate:      pgtype.Date{Time: input.BaseDate, Valid: true},
-			CycleYears:    int32(input.CycleYears),
+			BaseDate:      input.BaseDate,
+			CycleYears:    int64(input.CycleYears),
 			TradeInValue:  fromThousandYen(input.TradeInValue),
 			Recurring:     input.Recurring,
 			FinancingMode: input.FinancingMode,
@@ -170,11 +166,11 @@ func bigPurchaseUpdate(q *sqlcgen.Queries) http.HandlerFunc {
 		}
 
 		if _, err := q.UpdateBigPurchase(r.Context(), sqlcgen.UpdateBigPurchaseParams{
-			ID:            int32(id),
+			ID:            int64(id),
 			Name:          input.Name,
 			BaseAmount:    fromThousandYen(input.BaseAmount),
-			BaseDate:      pgtype.Date{Time: input.BaseDate, Valid: true},
-			CycleYears:    int32(input.CycleYears),
+			BaseDate:      input.BaseDate,
+			CycleYears:    int64(input.CycleYears),
 			TradeInValue:  fromThousandYen(input.TradeInValue),
 			Recurring:     input.Recurring,
 			FinancingMode: input.FinancingMode,
@@ -202,16 +198,18 @@ func bigPurchaseGrowthRateOverride(q *sqlcgen.Queries) http.HandlerFunc {
 			return
 		}
 
-		var growthRate pgtype.Numeric
+		var growthRate sql.NullFloat64
 		if s := r.FormValue("category_growth_rate"); s != "" {
-			if err := growthRate.Scan(s); err != nil {
+			f, err := strconv.ParseFloat(s, 64)
+			if err != nil {
 				renderAssumptionsError(w, r.Context(), q, "値上がり率の形式が不正です")
 				return
 			}
+			growthRate = sql.NullFloat64{Float64: f, Valid: true}
 		}
 
 		if _, err := q.UpdateBigPurchaseGrowthRate(r.Context(), sqlcgen.UpdateBigPurchaseGrowthRateParams{
-			ID:                 int32(id),
+			ID:                 int64(id),
 			CategoryGrowthRate: growthRate,
 		}); err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("更新に失敗しました: %v", err))
@@ -228,7 +226,7 @@ func bigPurchaseDelete(q *sqlcgen.Queries) http.HandlerFunc {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
-		if err := q.DeleteBigPurchase(r.Context(), int32(id)); err != nil {
+		if err := q.DeleteBigPurchase(r.Context(), int64(id)); err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("削除に失敗しました: %v", err))
 			return
 		}

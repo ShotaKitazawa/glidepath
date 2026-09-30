@@ -2,13 +2,12 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ShotaKitazawa/glidepath/internal/calc"
 	"github.com/ShotaKitazawa/glidepath/internal/database/sqlcgen"
@@ -46,15 +45,15 @@ func registerFunds(mux *http.ServeMux, q *sqlcgen.Queries) {
 }
 
 type fundView struct {
-	ID            int32
+	ID            int64
 	Name          string
 	FundCode      string
 	NavSourceURL  string
 	LatestNAVDate string
 	// LatestNAVYen stays raw yen (not 千円) — it's the fund's 基準価額 (a
 	// per-10,000-unit price index, SPEC.md 3章), not a spendable amount.
-	LatestNAVYen            int32
-	TotalContribThousandYen int32
+	LatestNAVYen            int64
+	TotalContribThousandYen int64
 	// NavHistoryCount reflects this fund's own fund_nav_history rows (not
 	// the proxy's, if any) — it backs the delete confirmation prompt, which
 	// warns about exactly what that fund's own cascade delete would remove.
@@ -90,19 +89,19 @@ func loadFundsView(ctx context.Context, q *sqlcgen.Queries) ([]fundView, error) 
 
 		navRows := ownNavRows
 		if f.NavProxyFundID.Valid {
-			proxyFund, err := q.GetFund(ctx, f.NavProxyFundID.Int32)
+			proxyFund, err := q.GetFund(ctx, f.NavProxyFundID.Int64)
 			if err != nil {
 				return nil, err
 			}
 			view.NavProxyFundName = proxyFund.Name
-			navRows, err = q.ListFundNavHistory(ctx, f.NavProxyFundID.Int32)
+			navRows, err = q.ListFundNavHistory(ctx, f.NavProxyFundID.Int64)
 			if err != nil {
 				return nil, err
 			}
 		}
 		if len(navRows) > 0 {
 			latest := navRows[len(navRows)-1]
-			view.LatestNAVDate = latest.NavDate.Time.Format("2006-01-02")
+			view.LatestNAVDate = latest.NavDate.Format("2006-01-02")
 			view.LatestNAVYen = latest.NavPrice
 		}
 
@@ -113,7 +112,7 @@ func loadFundsView(ctx context.Context, q *sqlcgen.Queries) ([]fundView, error) 
 		calcContribs := make([]calc.Contribution, len(contribs))
 		for i, c := range contribs {
 			calcContribs[i] = calc.Contribution{
-				Date:      c.ContributionDate.Time,
+				Date:      c.ContributionDate,
 				AmountYen: int(c.Amount),
 				Kind:      calc.ContributionKind(c.ContributionType),
 			}
@@ -131,7 +130,7 @@ func loadFundsView(ctx context.Context, q *sqlcgen.Queries) ([]fundView, error) 
 func fundNavHistory(ctx context.Context, q *sqlcgen.Queries, fund sqlcgen.Fund) ([]sqlcgen.FundNavHistory, error) {
 	sourceID := fund.ID
 	if fund.NavProxyFundID.Valid {
-		sourceID = fund.NavProxyFundID.Int32
+		sourceID = fund.NavProxyFundID.Int64
 	}
 	return q.ListFundNavHistory(ctx, sourceID)
 }
@@ -148,14 +147,14 @@ func fundCreate(q *sqlcgen.Queries) http.HandlerFunc {
 			return
 		}
 
-		var navProxyFundID pgtype.Int4
+		var navProxyFundID sql.NullInt64
 		if s := r.FormValue("nav_proxy_fund_id"); s != "" {
 			id, err := strconv.Atoi(s)
 			if err != nil {
 				renderAssumptionsError(w, r.Context(), q, "参照先ファンドの形式が不正です")
 				return
 			}
-			navProxyFundID = pgtype.Int4{Int32: int32(id), Valid: true}
+			navProxyFundID = sql.NullInt64{Int64: int64(id), Valid: true}
 		}
 
 		// 自前の基準価額同期（URL/コード）と、他ファンドの値動きを参照する
@@ -174,8 +173,8 @@ func fundCreate(q *sqlcgen.Queries) http.HandlerFunc {
 
 		if _, err := q.CreateFund(r.Context(), sqlcgen.CreateFundParams{
 			Name:           name,
-			IsinOrCode:     pgtype.Text{String: fundCode, Valid: fundCode != ""},
-			NavSourceUrl:   pgtype.Text{String: navSourceURL, Valid: navSourceURL != ""},
+			IsinOrCode:     sql.NullString{String: fundCode, Valid: fundCode != ""},
+			NavSourceUrl:   sql.NullString{String: navSourceURL, Valid: navSourceURL != ""},
 			NavProxyFundID: navProxyFundID,
 		}); err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("保存に失敗しました: %v", err))
@@ -197,7 +196,7 @@ func fundSyncNAV(q *sqlcgen.Queries) http.HandlerFunc {
 			return
 		}
 
-		fund, err := q.GetFund(ctx, int32(fundID))
+		fund, err := q.GetFund(ctx, int64(fundID))
 		if err != nil {
 			renderAssumptionsError(w, ctx, q, fmt.Sprintf("ファンドが見つかりません: %v", err))
 			return
@@ -213,7 +212,7 @@ func fundSyncNAV(q *sqlcgen.Queries) http.HandlerFunc {
 
 		from := time.Now().AddDate(0, 0, -maxSyncWindowDays)
 		if latest, err := q.GetLatestFundNav(ctx, fund.ID); err == nil {
-			from = latest.NavDate.Time.AddDate(0, 0, 1)
+			from = latest.NavDate.AddDate(0, 0, 1)
 		}
 		to := time.Now().AddDate(0, 0, -1) // yesterday: today's NAV may not be published yet
 
@@ -235,8 +234,8 @@ func fundSyncNAV(q *sqlcgen.Queries) http.HandlerFunc {
 		for _, quote := range quotes {
 			if _, err := q.UpsertFundNavHistory(ctx, sqlcgen.UpsertFundNavHistoryParams{
 				FundID:   fund.ID,
-				NavDate:  pgtype.Date{Time: quote.Date, Valid: true},
-				NavPrice: int32(quote.NAVYen),
+				NavDate:  quote.Date,
+				NavPrice: int64(quote.NAVYen),
 			}); err != nil {
 				renderAssumptionsError(w, ctx, q, fmt.Sprintf("基準価額の保存に失敗しました: %v", err))
 				return
@@ -278,7 +277,7 @@ func fundInitialHolding(q *sqlcgen.Queries) http.HandlerFunc {
 			return
 		}
 
-		fund, err := q.GetFund(ctx, int32(fundID))
+		fund, err := q.GetFund(ctx, int64(fundID))
 		if err != nil {
 			renderAssumptionsError(w, ctx, q, fmt.Sprintf("ファンドが見つかりません: %v", err))
 			return
@@ -290,7 +289,7 @@ func fundInitialHolding(q *sqlcgen.Queries) http.HandlerFunc {
 		}
 		hasCoverage := false
 		for _, n := range navRows {
-			if !n.NavDate.Time.After(asOf) {
+			if !n.NavDate.After(asOf) {
 				hasCoverage = true
 				break
 			}
@@ -301,16 +300,16 @@ func fundInitialHolding(q *sqlcgen.Queries) http.HandlerFunc {
 		}
 
 		if err := q.DeleteNisaContributionByFundAndDate(ctx, sqlcgen.DeleteNisaContributionByFundAndDateParams{
-			FundID:           int32(fundID),
-			ContributionDate: pgtype.Date{Time: asOf, Valid: true},
+			FundID:           int64(fundID),
+			ContributionDate: asOf,
 		}); err != nil {
 			renderAssumptionsError(w, ctx, q, fmt.Sprintf("保存に失敗しました: %v", err))
 			return
 		}
 		if _, err := q.CreateNisaContribution(ctx, sqlcgen.CreateNisaContributionParams{
-			ContributionDate: pgtype.Date{Time: asOf, Valid: true},
+			ContributionDate: asOf,
 			Amount:           fromThousandYen(amountThousand),
-			FundID:           int32(fundID),
+			FundID:           int64(fundID),
 			ContributionType: string(calc.ContributionSnapshot),
 		}); err != nil {
 			renderAssumptionsError(w, ctx, q, fmt.Sprintf("保存に失敗しました: %v", err))
@@ -328,7 +327,7 @@ func fundDelete(q *sqlcgen.Queries) http.HandlerFunc {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
-		if err := q.DeleteFund(r.Context(), int32(id)); err != nil {
+		if err := q.DeleteFund(r.Context(), int64(id)); err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("削除に失敗しました: %v", err))
 			return
 		}

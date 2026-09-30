@@ -7,20 +7,20 @@ package sqlcgen
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
+	"time"
 )
 
 const createBankAccount = `-- name: CreateBankAccount :one
 
 INSERT INTO bank_accounts (name)
-VALUES ($1)
+VALUES (?)
 RETURNING id, name
 `
 
 // bank_accounts -----------------------------------------------------------------------------
 func (q *Queries) CreateBankAccount(ctx context.Context, name string) (BankAccount, error) {
-	row := q.db.QueryRow(ctx, createBankAccount, name)
+	row := q.db.QueryRowContext(ctx, createBankAccount, name)
 	var i BankAccount
 	err := row.Scan(&i.ID, &i.Name)
 	return i, err
@@ -29,19 +29,19 @@ func (q *Queries) CreateBankAccount(ctx context.Context, name string) (BankAccou
 const createBankAccountBalance = `-- name: CreateBankAccountBalance :one
 
 INSERT INTO bank_account_balances (monthly_record_id, bank_account_id, amount)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, monthly_record_id, bank_account_id, amount
 `
 
 type CreateBankAccountBalanceParams struct {
-	MonthlyRecordID int32
-	BankAccountID   int32
-	Amount          int32
+	MonthlyRecordID int64
+	BankAccountID   int64
+	Amount          int64
 }
 
 // bank_account_balances -----------------------------------------------------------------------
 func (q *Queries) CreateBankAccountBalance(ctx context.Context, arg CreateBankAccountBalanceParams) (BankAccountBalance, error) {
-	row := q.db.QueryRow(ctx, createBankAccountBalance, arg.MonthlyRecordID, arg.BankAccountID, arg.Amount)
+	row := q.db.QueryRowContext(ctx, createBankAccountBalance, arg.MonthlyRecordID, arg.BankAccountID, arg.Amount)
 	var i BankAccountBalance
 	err := row.Scan(
 		&i.ID,
@@ -55,24 +55,24 @@ func (q *Queries) CreateBankAccountBalance(ctx context.Context, arg CreateBankAc
 const createBigPurchase = `-- name: CreateBigPurchase :one
 
 INSERT INTO big_purchases (name, base_amount, base_date, cycle_years, category_growth_rate, trade_in_value, recurring, financing_mode)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, base_amount, base_date, cycle_years, category_growth_rate, trade_in_value, recurring, financing_mode
 `
 
 type CreateBigPurchaseParams struct {
 	Name               string
-	BaseAmount         int32
-	BaseDate           pgtype.Date
-	CycleYears         int32
-	CategoryGrowthRate pgtype.Numeric
-	TradeInValue       int32
+	BaseAmount         int64
+	BaseDate           time.Time
+	CycleYears         int64
+	CategoryGrowthRate sql.NullFloat64
+	TradeInValue       int64
 	Recurring          bool
 	FinancingMode      string
 }
 
 // big_purchases --------------------------------------------------------------
 func (q *Queries) CreateBigPurchase(ctx context.Context, arg CreateBigPurchaseParams) (BigPurchase, error) {
-	row := q.db.QueryRow(ctx, createBigPurchase,
+	row := q.db.QueryRowContext(ctx, createBigPurchase,
 		arg.Name,
 		arg.BaseAmount,
 		arg.BaseDate,
@@ -100,19 +100,19 @@ func (q *Queries) CreateBigPurchase(ctx context.Context, arg CreateBigPurchasePa
 const createChatMessage = `-- name: CreateChatMessage :one
 
 INSERT INTO chat_messages (session_id, role, content)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, session_id, role, content, created_at
 `
 
 type CreateChatMessageParams struct {
-	SessionID int32
+	SessionID int64
 	Role      string
 	Content   string
 }
 
 // chat_messages -------------------------------------------------------------------------------
 func (q *Queries) CreateChatMessage(ctx context.Context, arg CreateChatMessageParams) (ChatMessage, error) {
-	row := q.db.QueryRow(ctx, createChatMessage, arg.SessionID, arg.Role, arg.Content)
+	row := q.db.QueryRowContext(ctx, createChatMessage, arg.SessionID, arg.Role, arg.Content)
 	var i ChatMessage
 	err := row.Scan(
 		&i.ID,
@@ -127,13 +127,13 @@ func (q *Queries) CreateChatMessage(ctx context.Context, arg CreateChatMessagePa
 const createChatSession = `-- name: CreateChatSession :one
 
 INSERT INTO chat_sessions (context_summary_id)
-VALUES ($1)
+VALUES (?)
 RETURNING id, started_at, context_summary_id
 `
 
 // chat_sessions -----------------------------------------------------------------------------
-func (q *Queries) CreateChatSession(ctx context.Context, contextSummaryID pgtype.Int4) (ChatSession, error) {
-	row := q.db.QueryRow(ctx, createChatSession, contextSummaryID)
+func (q *Queries) CreateChatSession(ctx context.Context, contextSummaryID sql.NullInt64) (ChatSession, error) {
+	row := q.db.QueryRowContext(ctx, createChatSession, contextSummaryID)
 	var i ChatSession
 	err := row.Scan(&i.ID, &i.StartedAt, &i.ContextSummaryID)
 	return i, err
@@ -142,18 +142,18 @@ func (q *Queries) CreateChatSession(ctx context.Context, contextSummaryID pgtype
 const createContextSummary = `-- name: CreateContextSummary :one
 
 INSERT INTO context_summaries (scenario_id, summary_json)
-VALUES ($1, $2)
+VALUES (?, ?)
 RETURNING id, generated_at, scenario_id, summary_json
 `
 
 type CreateContextSummaryParams struct {
-	ScenarioID  pgtype.Int4
-	SummaryJson []byte
+	ScenarioID  sql.NullInt64
+	SummaryJson string
 }
 
 // context_summaries -----------------------------------------------------------------------
 func (q *Queries) CreateContextSummary(ctx context.Context, arg CreateContextSummaryParams) (ContextSummary, error) {
-	row := q.db.QueryRow(ctx, createContextSummary, arg.ScenarioID, arg.SummaryJson)
+	row := q.db.QueryRowContext(ctx, createContextSummary, arg.ScenarioID, arg.SummaryJson)
 	var i ContextSummary
 	err := row.Scan(
 		&i.ID,
@@ -167,19 +167,19 @@ func (q *Queries) CreateContextSummary(ctx context.Context, arg CreateContextSum
 const createExpenseCategory = `-- name: CreateExpenseCategory :one
 
 INSERT INTO expense_categories (monthly_record_id, category, amount)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, monthly_record_id, category, amount
 `
 
 type CreateExpenseCategoryParams struct {
-	MonthlyRecordID int32
+	MonthlyRecordID int64
 	Category        string
-	Amount          int32
+	Amount          int64
 }
 
 // expense_categories ------------------------------------------------------
 func (q *Queries) CreateExpenseCategory(ctx context.Context, arg CreateExpenseCategoryParams) (ExpenseCategory, error) {
-	row := q.db.QueryRow(ctx, createExpenseCategory, arg.MonthlyRecordID, arg.Category, arg.Amount)
+	row := q.db.QueryRowContext(ctx, createExpenseCategory, arg.MonthlyRecordID, arg.Category, arg.Amount)
 	var i ExpenseCategory
 	err := row.Scan(
 		&i.ID,
@@ -193,23 +193,23 @@ func (q *Queries) CreateExpenseCategory(ctx context.Context, arg CreateExpenseCa
 const createExpenseForecast = `-- name: CreateExpenseForecast :one
 
 INSERT INTO expense_forecasts (family_member_id, stage, track, annual_cost, start_age, end_age, is_override)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING id, family_member_id, stage, track, annual_cost, start_age, end_age, is_override
 `
 
 type CreateExpenseForecastParams struct {
-	FamilyMemberID int32
+	FamilyMemberID int64
 	Stage          string
 	Track          string
-	AnnualCost     int32
-	StartAge       int32
-	EndAge         int32
+	AnnualCost     int64
+	StartAge       int64
+	EndAge         int64
 	IsOverride     bool
 }
 
 // expense_forecasts ---------------------------------------------------------
 func (q *Queries) CreateExpenseForecast(ctx context.Context, arg CreateExpenseForecastParams) (ExpenseForecast, error) {
-	row := q.db.QueryRow(ctx, createExpenseForecast,
+	row := q.db.QueryRowContext(ctx, createExpenseForecast,
 		arg.FamilyMemberID,
 		arg.Stage,
 		arg.Track,
@@ -235,48 +235,66 @@ func (q *Queries) CreateExpenseForecast(ctx context.Context, arg CreateExpenseFo
 const createFamilyMember = `-- name: CreateFamilyMember :one
 
 INSERT INTO family_members (relation, birth_month)
-VALUES ($1, $2)
+VALUES (?, ?)
 RETURNING id, relation, birth_month
 `
 
 type CreateFamilyMemberParams struct {
 	Relation   string
-	BirthMonth pgtype.Date
+	BirthMonth time.Time
 }
 
 // family_members -----------------------------------------------------------
 func (q *Queries) CreateFamilyMember(ctx context.Context, arg CreateFamilyMemberParams) (FamilyMember, error) {
-	row := q.db.QueryRow(ctx, createFamilyMember, arg.Relation, arg.BirthMonth)
+	row := q.db.QueryRowContext(ctx, createFamilyMember, arg.Relation, arg.BirthMonth)
 	var i FamilyMember
 	err := row.Scan(&i.ID, &i.Relation, &i.BirthMonth)
 	return i, err
 }
 
-type CreateForecastResultsParams struct {
-	ScenarioID int32
-	Year       int32
-	P10        int32
-	P50        int32
-	P90        int32
+const createForecastResult = `-- name: CreateForecastResult :exec
+
+INSERT INTO forecast_results (scenario_id, year, p10, p50, p90)
+VALUES (?, ?, ?, ?, ?)
+`
+
+type CreateForecastResultParams struct {
+	ScenarioID int64
+	Year       int64
+	P10        int64
+	P50        int64
+	P90        int64
+}
+
+// forecast_results --------------------------------------------------------------------
+func (q *Queries) CreateForecastResult(ctx context.Context, arg CreateForecastResultParams) error {
+	_, err := q.db.ExecContext(ctx, createForecastResult,
+		arg.ScenarioID,
+		arg.Year,
+		arg.P10,
+		arg.P50,
+		arg.P90,
+	)
+	return err
 }
 
 const createFund = `-- name: CreateFund :one
 
 INSERT INTO funds (name, isin_or_code, nav_source_url, nav_proxy_fund_id)
-VALUES ($1, $2, $3, $4)
+VALUES (?, ?, ?, ?)
 RETURNING id, name, isin_or_code, nav_source_url, nav_proxy_fund_id
 `
 
 type CreateFundParams struct {
 	Name           string
-	IsinOrCode     pgtype.Text
-	NavSourceUrl   pgtype.Text
-	NavProxyFundID pgtype.Int4
+	IsinOrCode     sql.NullString
+	NavSourceUrl   sql.NullString
+	NavProxyFundID sql.NullInt64
 }
 
 // funds ------------------------------------------------------------------------
 func (q *Queries) CreateFund(ctx context.Context, arg CreateFundParams) (Fund, error) {
-	row := q.db.QueryRow(ctx, createFund,
+	row := q.db.QueryRowContext(ctx, createFund,
 		arg.Name,
 		arg.IsinOrCode,
 		arg.NavSourceUrl,
@@ -296,19 +314,19 @@ func (q *Queries) CreateFund(ctx context.Context, arg CreateFundParams) (Fund, e
 const createGoal = `-- name: CreateGoal :one
 
 INSERT INTO goals (goal_type, target_value, target_date)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 RETURNING id, goal_type, target_value, target_date
 `
 
 type CreateGoalParams struct {
 	GoalType    string
-	TargetValue pgtype.Numeric
-	TargetDate  pgtype.Date
+	TargetValue float64
+	TargetDate  sql.NullTime
 }
 
 // goals --------------------------------------------------------------------------
 func (q *Queries) CreateGoal(ctx context.Context, arg CreateGoalParams) (Goal, error) {
-	row := q.db.QueryRow(ctx, createGoal, arg.GoalType, arg.TargetValue, arg.TargetDate)
+	row := q.db.QueryRowContext(ctx, createGoal, arg.GoalType, arg.TargetValue, arg.TargetDate)
 	var i Goal
 	err := row.Scan(
 		&i.ID,
@@ -322,20 +340,20 @@ func (q *Queries) CreateGoal(ctx context.Context, arg CreateGoalParams) (Goal, e
 const createNisaContribution = `-- name: CreateNisaContribution :one
 
 INSERT INTO nisa_contributions (contribution_date, amount, fund_id, contribution_type)
-VALUES ($1, $2, $3, $4)
+VALUES (?, ?, ?, ?)
 RETURNING id, contribution_date, amount, fund_id, contribution_type
 `
 
 type CreateNisaContributionParams struct {
-	ContributionDate pgtype.Date
-	Amount           int32
-	FundID           int32
+	ContributionDate time.Time
+	Amount           int64
+	FundID           int64
 	ContributionType string
 }
 
 // nisa_contributions -----------------------------------------------------------
 func (q *Queries) CreateNisaContribution(ctx context.Context, arg CreateNisaContributionParams) (NisaContribution, error) {
-	row := q.db.QueryRow(ctx, createNisaContribution,
+	row := q.db.QueryRowContext(ctx, createNisaContribution,
 		arg.ContributionDate,
 		arg.Amount,
 		arg.FundID,
@@ -355,101 +373,101 @@ func (q *Queries) CreateNisaContribution(ctx context.Context, arg CreateNisaCont
 const createScenario = `-- name: CreateScenario :one
 
 INSERT INTO scenarios (params)
-VALUES ($1)
+VALUES (?)
 RETURNING id, run_at, params
 `
 
 // scenarios ------------------------------------------------------------------------
-func (q *Queries) CreateScenario(ctx context.Context, params []byte) (Scenario, error) {
-	row := q.db.QueryRow(ctx, createScenario, params)
+func (q *Queries) CreateScenario(ctx context.Context, params string) (Scenario, error) {
+	row := q.db.QueryRowContext(ctx, createScenario, params)
 	var i Scenario
 	err := row.Scan(&i.ID, &i.RunAt, &i.Params)
 	return i, err
 }
 
 const deleteBankAccount = `-- name: DeleteBankAccount :exec
-DELETE FROM bank_accounts WHERE id = $1
+DELETE FROM bank_accounts WHERE id = ?
 `
 
-func (q *Queries) DeleteBankAccount(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteBankAccount, id)
+func (q *Queries) DeleteBankAccount(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteBankAccount, id)
 	return err
 }
 
 const deleteBankAccountBalancesByMonthlyRecord = `-- name: DeleteBankAccountBalancesByMonthlyRecord :exec
-DELETE FROM bank_account_balances WHERE monthly_record_id = $1
+DELETE FROM bank_account_balances WHERE monthly_record_id = ?
 `
 
-func (q *Queries) DeleteBankAccountBalancesByMonthlyRecord(ctx context.Context, monthlyRecordID int32) error {
-	_, err := q.db.Exec(ctx, deleteBankAccountBalancesByMonthlyRecord, monthlyRecordID)
+func (q *Queries) DeleteBankAccountBalancesByMonthlyRecord(ctx context.Context, monthlyRecordID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteBankAccountBalancesByMonthlyRecord, monthlyRecordID)
 	return err
 }
 
 const deleteBigPurchase = `-- name: DeleteBigPurchase :exec
-DELETE FROM big_purchases WHERE id = $1
+DELETE FROM big_purchases WHERE id = ?
 `
 
-func (q *Queries) DeleteBigPurchase(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteBigPurchase, id)
+func (q *Queries) DeleteBigPurchase(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteBigPurchase, id)
 	return err
 }
 
 const deleteExpenseCategoriesByMonthlyRecord = `-- name: DeleteExpenseCategoriesByMonthlyRecord :exec
-DELETE FROM expense_categories WHERE monthly_record_id = $1
+DELETE FROM expense_categories WHERE monthly_record_id = ?
 `
 
-func (q *Queries) DeleteExpenseCategoriesByMonthlyRecord(ctx context.Context, monthlyRecordID int32) error {
-	_, err := q.db.Exec(ctx, deleteExpenseCategoriesByMonthlyRecord, monthlyRecordID)
+func (q *Queries) DeleteExpenseCategoriesByMonthlyRecord(ctx context.Context, monthlyRecordID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteExpenseCategoriesByMonthlyRecord, monthlyRecordID)
 	return err
 }
 
 const deleteExpenseForecast = `-- name: DeleteExpenseForecast :exec
-DELETE FROM expense_forecasts WHERE id = $1
+DELETE FROM expense_forecasts WHERE id = ?
 `
 
-func (q *Queries) DeleteExpenseForecast(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteExpenseForecast, id)
+func (q *Queries) DeleteExpenseForecast(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteExpenseForecast, id)
 	return err
 }
 
 const deleteFamilyMember = `-- name: DeleteFamilyMember :exec
-DELETE FROM family_members WHERE id = $1
+DELETE FROM family_members WHERE id = ?
 `
 
-func (q *Queries) DeleteFamilyMember(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteFamilyMember, id)
+func (q *Queries) DeleteFamilyMember(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteFamilyMember, id)
 	return err
 }
 
 const deleteFund = `-- name: DeleteFund :exec
-DELETE FROM funds WHERE id = $1
+DELETE FROM funds WHERE id = ?
 `
 
-func (q *Queries) DeleteFund(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteFund, id)
+func (q *Queries) DeleteFund(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteFund, id)
 	return err
 }
 
 const deleteNisaContributionByFundAndDate = `-- name: DeleteNisaContributionByFundAndDate :exec
-DELETE FROM nisa_contributions WHERE fund_id = $1 AND contribution_date = $2
+DELETE FROM nisa_contributions WHERE fund_id = ? AND contribution_date = ?
 `
 
 type DeleteNisaContributionByFundAndDateParams struct {
-	FundID           int32
-	ContributionDate pgtype.Date
+	FundID           int64
+	ContributionDate time.Time
 }
 
 func (q *Queries) DeleteNisaContributionByFundAndDate(ctx context.Context, arg DeleteNisaContributionByFundAndDateParams) error {
-	_, err := q.db.Exec(ctx, deleteNisaContributionByFundAndDate, arg.FundID, arg.ContributionDate)
+	_, err := q.db.ExecContext(ctx, deleteNisaContributionByFundAndDate, arg.FundID, arg.ContributionDate)
 	return err
 }
 
 const getBigPurchase = `-- name: GetBigPurchase :one
-SELECT id, name, base_amount, base_date, cycle_years, category_growth_rate, trade_in_value, recurring, financing_mode FROM big_purchases WHERE id = $1
+SELECT id, name, base_amount, base_date, cycle_years, category_growth_rate, trade_in_value, recurring, financing_mode FROM big_purchases WHERE id = ?
 `
 
-func (q *Queries) GetBigPurchase(ctx context.Context, id int32) (BigPurchase, error) {
-	row := q.db.QueryRow(ctx, getBigPurchase, id)
+func (q *Queries) GetBigPurchase(ctx context.Context, id int64) (BigPurchase, error) {
+	row := q.db.QueryRowContext(ctx, getBigPurchase, id)
 	var i BigPurchase
 	err := row.Scan(
 		&i.ID,
@@ -466,33 +484,33 @@ func (q *Queries) GetBigPurchase(ctx context.Context, id int32) (BigPurchase, er
 }
 
 const getChatSession = `-- name: GetChatSession :one
-SELECT id, started_at, context_summary_id FROM chat_sessions WHERE id = $1
+SELECT id, started_at, context_summary_id FROM chat_sessions WHERE id = ?
 `
 
-func (q *Queries) GetChatSession(ctx context.Context, id int32) (ChatSession, error) {
-	row := q.db.QueryRow(ctx, getChatSession, id)
+func (q *Queries) GetChatSession(ctx context.Context, id int64) (ChatSession, error) {
+	row := q.db.QueryRowContext(ctx, getChatSession, id)
 	var i ChatSession
 	err := row.Scan(&i.ID, &i.StartedAt, &i.ContextSummaryID)
 	return i, err
 }
 
 const getFamilyMember = `-- name: GetFamilyMember :one
-SELECT id, relation, birth_month FROM family_members WHERE id = $1
+SELECT id, relation, birth_month FROM family_members WHERE id = ?
 `
 
-func (q *Queries) GetFamilyMember(ctx context.Context, id int32) (FamilyMember, error) {
-	row := q.db.QueryRow(ctx, getFamilyMember, id)
+func (q *Queries) GetFamilyMember(ctx context.Context, id int64) (FamilyMember, error) {
+	row := q.db.QueryRowContext(ctx, getFamilyMember, id)
 	var i FamilyMember
 	err := row.Scan(&i.ID, &i.Relation, &i.BirthMonth)
 	return i, err
 }
 
 const getFund = `-- name: GetFund :one
-SELECT id, name, isin_or_code, nav_source_url, nav_proxy_fund_id FROM funds WHERE id = $1
+SELECT id, name, isin_or_code, nav_source_url, nav_proxy_fund_id FROM funds WHERE id = ?
 `
 
-func (q *Queries) GetFund(ctx context.Context, id int32) (Fund, error) {
-	row := q.db.QueryRow(ctx, getFund, id)
+func (q *Queries) GetFund(ctx context.Context, id int64) (Fund, error) {
+	row := q.db.QueryRowContext(ctx, getFund, id)
 	var i Fund
 	err := row.Scan(
 		&i.ID,
@@ -507,13 +525,13 @@ func (q *Queries) GetFund(ctx context.Context, id int32) (Fund, error) {
 const getLatestBankAccountBalance = `-- name: GetLatestBankAccountBalance :one
 SELECT bab.id, bab.monthly_record_id, bab.bank_account_id, bab.amount FROM bank_account_balances bab
 JOIN monthly_records mr ON mr.id = bab.monthly_record_id
-WHERE bab.bank_account_id = $1
+WHERE bab.bank_account_id = ?
 ORDER BY mr.record_month DESC
 LIMIT 1
 `
 
-func (q *Queries) GetLatestBankAccountBalance(ctx context.Context, bankAccountID int32) (BankAccountBalance, error) {
-	row := q.db.QueryRow(ctx, getLatestBankAccountBalance, bankAccountID)
+func (q *Queries) GetLatestBankAccountBalance(ctx context.Context, bankAccountID int64) (BankAccountBalance, error) {
+	row := q.db.QueryRowContext(ctx, getLatestBankAccountBalance, bankAccountID)
 	var i BankAccountBalance
 	err := row.Scan(
 		&i.ID,
@@ -529,7 +547,7 @@ SELECT id, generated_at, scenario_id, summary_json FROM context_summaries ORDER 
 `
 
 func (q *Queries) GetLatestContextSummary(ctx context.Context) (ContextSummary, error) {
-	row := q.db.QueryRow(ctx, getLatestContextSummary)
+	row := q.db.QueryRowContext(ctx, getLatestContextSummary)
 	var i ContextSummary
 	err := row.Scan(
 		&i.ID,
@@ -541,11 +559,11 @@ func (q *Queries) GetLatestContextSummary(ctx context.Context) (ContextSummary, 
 }
 
 const getLatestFundNav = `-- name: GetLatestFundNav :one
-SELECT id, fund_id, nav_date, nav_price FROM fund_nav_history WHERE fund_id = $1 ORDER BY nav_date DESC LIMIT 1
+SELECT id, fund_id, nav_date, nav_price FROM fund_nav_history WHERE fund_id = ? ORDER BY nav_date DESC LIMIT 1
 `
 
-func (q *Queries) GetLatestFundNav(ctx context.Context, fundID int32) (FundNavHistory, error) {
-	row := q.db.QueryRow(ctx, getLatestFundNav, fundID)
+func (q *Queries) GetLatestFundNav(ctx context.Context, fundID int64) (FundNavHistory, error) {
+	row := q.db.QueryRowContext(ctx, getLatestFundNav, fundID)
 	var i FundNavHistory
 	err := row.Scan(
 		&i.ID,
@@ -557,11 +575,11 @@ func (q *Queries) GetLatestFundNav(ctx context.Context, fundID int32) (FundNavHi
 }
 
 const getMonthlyRecordByMonth = `-- name: GetMonthlyRecordByMonth :one
-SELECT id, record_month, income_monthly, bank_balance, created_at FROM monthly_records WHERE record_month = $1
+SELECT id, record_month, income_monthly, bank_balance, created_at FROM monthly_records WHERE record_month = ?
 `
 
-func (q *Queries) GetMonthlyRecordByMonth(ctx context.Context, recordMonth pgtype.Date) (MonthlyRecord, error) {
-	row := q.db.QueryRow(ctx, getMonthlyRecordByMonth, recordMonth)
+func (q *Queries) GetMonthlyRecordByMonth(ctx context.Context, recordMonth time.Time) (MonthlyRecord, error) {
+	row := q.db.QueryRowContext(ctx, getMonthlyRecordByMonth, recordMonth)
 	var i MonthlyRecord
 	err := row.Scan(
 		&i.ID,
@@ -574,16 +592,16 @@ func (q *Queries) GetMonthlyRecordByMonth(ctx context.Context, recordMonth pgtyp
 }
 
 const getNisaContributionByFundAndDate = `-- name: GetNisaContributionByFundAndDate :one
-SELECT id, contribution_date, amount, fund_id, contribution_type FROM nisa_contributions WHERE fund_id = $1 AND contribution_date = $2
+SELECT id, contribution_date, amount, fund_id, contribution_type FROM nisa_contributions WHERE fund_id = ? AND contribution_date = ?
 `
 
 type GetNisaContributionByFundAndDateParams struct {
-	FundID           int32
-	ContributionDate pgtype.Date
+	FundID           int64
+	ContributionDate time.Time
 }
 
 func (q *Queries) GetNisaContributionByFundAndDate(ctx context.Context, arg GetNisaContributionByFundAndDateParams) (NisaContribution, error) {
-	row := q.db.QueryRow(ctx, getNisaContributionByFundAndDate, arg.FundID, arg.ContributionDate)
+	row := q.db.QueryRowContext(ctx, getNisaContributionByFundAndDate, arg.FundID, arg.ContributionDate)
 	var i NisaContribution
 	err := row.Scan(
 		&i.ID,
@@ -596,22 +614,22 @@ func (q *Queries) GetNisaContributionByFundAndDate(ctx context.Context, arg GetN
 }
 
 const getScenario = `-- name: GetScenario :one
-SELECT id, run_at, params FROM scenarios WHERE id = $1
+SELECT id, run_at, params FROM scenarios WHERE id = ?
 `
 
-func (q *Queries) GetScenario(ctx context.Context, id int32) (Scenario, error) {
-	row := q.db.QueryRow(ctx, getScenario, id)
+func (q *Queries) GetScenario(ctx context.Context, id int64) (Scenario, error) {
+	row := q.db.QueryRowContext(ctx, getScenario, id)
 	var i Scenario
 	err := row.Scan(&i.ID, &i.RunAt, &i.Params)
 	return i, err
 }
 
 const listBankAccountBalancesByMonthlyRecord = `-- name: ListBankAccountBalancesByMonthlyRecord :many
-SELECT id, monthly_record_id, bank_account_id, amount FROM bank_account_balances WHERE monthly_record_id = $1
+SELECT id, monthly_record_id, bank_account_id, amount FROM bank_account_balances WHERE monthly_record_id = ?
 `
 
-func (q *Queries) ListBankAccountBalancesByMonthlyRecord(ctx context.Context, monthlyRecordID int32) ([]BankAccountBalance, error) {
-	rows, err := q.db.Query(ctx, listBankAccountBalancesByMonthlyRecord, monthlyRecordID)
+func (q *Queries) ListBankAccountBalancesByMonthlyRecord(ctx context.Context, monthlyRecordID int64) ([]BankAccountBalance, error) {
+	rows, err := q.db.QueryContext(ctx, listBankAccountBalancesByMonthlyRecord, monthlyRecordID)
 	if err != nil {
 		return nil, err
 	}
@@ -629,6 +647,9 @@ func (q *Queries) ListBankAccountBalancesByMonthlyRecord(ctx context.Context, mo
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -640,7 +661,7 @@ SELECT id, name FROM bank_accounts ORDER BY id
 `
 
 func (q *Queries) ListBankAccounts(ctx context.Context) ([]BankAccount, error) {
-	rows, err := q.db.Query(ctx, listBankAccounts)
+	rows, err := q.db.QueryContext(ctx, listBankAccounts)
 	if err != nil {
 		return nil, err
 	}
@@ -653,6 +674,9 @@ func (q *Queries) ListBankAccounts(ctx context.Context) ([]BankAccount, error) {
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -664,7 +688,7 @@ SELECT id, name, base_amount, base_date, cycle_years, category_growth_rate, trad
 `
 
 func (q *Queries) ListBigPurchases(ctx context.Context) ([]BigPurchase, error) {
-	rows, err := q.db.Query(ctx, listBigPurchases)
+	rows, err := q.db.QueryContext(ctx, listBigPurchases)
 	if err != nil {
 		return nil, err
 	}
@@ -687,6 +711,9 @@ func (q *Queries) ListBigPurchases(ctx context.Context) ([]BigPurchase, error) {
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -694,11 +721,11 @@ func (q *Queries) ListBigPurchases(ctx context.Context) ([]BigPurchase, error) {
 }
 
 const listChatMessagesBySession = `-- name: ListChatMessagesBySession :many
-SELECT id, session_id, role, content, created_at FROM chat_messages WHERE session_id = $1 ORDER BY created_at
+SELECT id, session_id, role, content, created_at FROM chat_messages WHERE session_id = ? ORDER BY created_at
 `
 
-func (q *Queries) ListChatMessagesBySession(ctx context.Context, sessionID int32) ([]ChatMessage, error) {
-	rows, err := q.db.Query(ctx, listChatMessagesBySession, sessionID)
+func (q *Queries) ListChatMessagesBySession(ctx context.Context, sessionID int64) ([]ChatMessage, error) {
+	rows, err := q.db.QueryContext(ctx, listChatMessagesBySession, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -717,6 +744,9 @@ func (q *Queries) ListChatMessagesBySession(ctx context.Context, sessionID int32
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -730,7 +760,7 @@ ORDER BY mr.record_month
 `
 
 func (q *Queries) ListExpenseCategories(ctx context.Context) ([]ExpenseCategory, error) {
-	rows, err := q.db.Query(ctx, listExpenseCategories)
+	rows, err := q.db.QueryContext(ctx, listExpenseCategories)
 	if err != nil {
 		return nil, err
 	}
@@ -747,6 +777,9 @@ func (q *Queries) ListExpenseCategories(ctx context.Context) ([]ExpenseCategory,
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -755,11 +788,11 @@ func (q *Queries) ListExpenseCategories(ctx context.Context) ([]ExpenseCategory,
 }
 
 const listExpenseCategoriesByMonthlyRecord = `-- name: ListExpenseCategoriesByMonthlyRecord :many
-SELECT id, monthly_record_id, category, amount FROM expense_categories WHERE monthly_record_id = $1 ORDER BY id
+SELECT id, monthly_record_id, category, amount FROM expense_categories WHERE monthly_record_id = ? ORDER BY id
 `
 
-func (q *Queries) ListExpenseCategoriesByMonthlyRecord(ctx context.Context, monthlyRecordID int32) ([]ExpenseCategory, error) {
-	rows, err := q.db.Query(ctx, listExpenseCategoriesByMonthlyRecord, monthlyRecordID)
+func (q *Queries) ListExpenseCategoriesByMonthlyRecord(ctx context.Context, monthlyRecordID int64) ([]ExpenseCategory, error) {
+	rows, err := q.db.QueryContext(ctx, listExpenseCategoriesByMonthlyRecord, monthlyRecordID)
 	if err != nil {
 		return nil, err
 	}
@@ -776,6 +809,9 @@ func (q *Queries) ListExpenseCategoriesByMonthlyRecord(ctx context.Context, mont
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -788,7 +824,7 @@ SELECT id, family_member_id, stage, track, annual_cost, start_age, end_age, is_o
 `
 
 func (q *Queries) ListExpenseForecasts(ctx context.Context) ([]ExpenseForecast, error) {
-	rows, err := q.db.Query(ctx, listExpenseForecasts)
+	rows, err := q.db.QueryContext(ctx, listExpenseForecasts)
 	if err != nil {
 		return nil, err
 	}
@@ -809,6 +845,9 @@ func (q *Queries) ListExpenseForecasts(ctx context.Context) ([]ExpenseForecast, 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -817,11 +856,11 @@ func (q *Queries) ListExpenseForecasts(ctx context.Context) ([]ExpenseForecast, 
 }
 
 const listExpenseForecastsByFamilyMember = `-- name: ListExpenseForecastsByFamilyMember :many
-SELECT id, family_member_id, stage, track, annual_cost, start_age, end_age, is_override FROM expense_forecasts WHERE family_member_id = $1 ORDER BY start_age
+SELECT id, family_member_id, stage, track, annual_cost, start_age, end_age, is_override FROM expense_forecasts WHERE family_member_id = ? ORDER BY start_age
 `
 
-func (q *Queries) ListExpenseForecastsByFamilyMember(ctx context.Context, familyMemberID int32) ([]ExpenseForecast, error) {
-	rows, err := q.db.Query(ctx, listExpenseForecastsByFamilyMember, familyMemberID)
+func (q *Queries) ListExpenseForecastsByFamilyMember(ctx context.Context, familyMemberID int64) ([]ExpenseForecast, error) {
+	rows, err := q.db.QueryContext(ctx, listExpenseForecastsByFamilyMember, familyMemberID)
 	if err != nil {
 		return nil, err
 	}
@@ -842,6 +881,9 @@ func (q *Queries) ListExpenseForecastsByFamilyMember(ctx context.Context, family
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -854,7 +896,7 @@ SELECT id, relation, birth_month FROM family_members ORDER BY birth_month
 `
 
 func (q *Queries) ListFamilyMembers(ctx context.Context) ([]FamilyMember, error) {
-	rows, err := q.db.Query(ctx, listFamilyMembers)
+	rows, err := q.db.QueryContext(ctx, listFamilyMembers)
 	if err != nil {
 		return nil, err
 	}
@@ -867,6 +909,9 @@ func (q *Queries) ListFamilyMembers(ctx context.Context) ([]FamilyMember, error)
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -874,11 +919,11 @@ func (q *Queries) ListFamilyMembers(ctx context.Context) ([]FamilyMember, error)
 }
 
 const listForecastResultsByScenario = `-- name: ListForecastResultsByScenario :many
-SELECT id, scenario_id, year, p10, p50, p90 FROM forecast_results WHERE scenario_id = $1 ORDER BY year
+SELECT id, scenario_id, year, p10, p50, p90 FROM forecast_results WHERE scenario_id = ? ORDER BY year
 `
 
-func (q *Queries) ListForecastResultsByScenario(ctx context.Context, scenarioID int32) ([]ForecastResult, error) {
-	rows, err := q.db.Query(ctx, listForecastResultsByScenario, scenarioID)
+func (q *Queries) ListForecastResultsByScenario(ctx context.Context, scenarioID int64) ([]ForecastResult, error) {
+	rows, err := q.db.QueryContext(ctx, listForecastResultsByScenario, scenarioID)
 	if err != nil {
 		return nil, err
 	}
@@ -898,6 +943,9 @@ func (q *Queries) ListForecastResultsByScenario(ctx context.Context, scenarioID 
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -905,11 +953,11 @@ func (q *Queries) ListForecastResultsByScenario(ctx context.Context, scenarioID 
 }
 
 const listFundNavHistory = `-- name: ListFundNavHistory :many
-SELECT id, fund_id, nav_date, nav_price FROM fund_nav_history WHERE fund_id = $1 ORDER BY nav_date
+SELECT id, fund_id, nav_date, nav_price FROM fund_nav_history WHERE fund_id = ? ORDER BY nav_date
 `
 
-func (q *Queries) ListFundNavHistory(ctx context.Context, fundID int32) ([]FundNavHistory, error) {
-	rows, err := q.db.Query(ctx, listFundNavHistory, fundID)
+func (q *Queries) ListFundNavHistory(ctx context.Context, fundID int64) ([]FundNavHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listFundNavHistory, fundID)
 	if err != nil {
 		return nil, err
 	}
@@ -927,6 +975,9 @@ func (q *Queries) ListFundNavHistory(ctx context.Context, fundID int32) ([]FundN
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -938,7 +989,7 @@ SELECT id, name, isin_or_code, nav_source_url, nav_proxy_fund_id FROM funds ORDE
 `
 
 func (q *Queries) ListFunds(ctx context.Context) ([]Fund, error) {
-	rows, err := q.db.Query(ctx, listFunds)
+	rows, err := q.db.QueryContext(ctx, listFunds)
 	if err != nil {
 		return nil, err
 	}
@@ -957,6 +1008,9 @@ func (q *Queries) ListFunds(ctx context.Context) ([]Fund, error) {
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -968,7 +1022,7 @@ SELECT id, goal_type, target_value, target_date FROM goals ORDER BY id
 `
 
 func (q *Queries) ListGoals(ctx context.Context) ([]Goal, error) {
-	rows, err := q.db.Query(ctx, listGoals)
+	rows, err := q.db.QueryContext(ctx, listGoals)
 	if err != nil {
 		return nil, err
 	}
@@ -986,6 +1040,9 @@ func (q *Queries) ListGoals(ctx context.Context) ([]Goal, error) {
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -997,7 +1054,7 @@ SELECT id, record_month, income_monthly, bank_balance, created_at FROM monthly_r
 `
 
 func (q *Queries) ListMonthlyRecords(ctx context.Context) ([]MonthlyRecord, error) {
-	rows, err := q.db.Query(ctx, listMonthlyRecords)
+	rows, err := q.db.QueryContext(ctx, listMonthlyRecords)
 	if err != nil {
 		return nil, err
 	}
@@ -1016,6 +1073,9 @@ func (q *Queries) ListMonthlyRecords(ctx context.Context) ([]MonthlyRecord, erro
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1027,7 +1087,7 @@ SELECT id, contribution_date, amount, fund_id, contribution_type FROM nisa_contr
 `
 
 func (q *Queries) ListNisaContributions(ctx context.Context) ([]NisaContribution, error) {
-	rows, err := q.db.Query(ctx, listNisaContributions)
+	rows, err := q.db.QueryContext(ctx, listNisaContributions)
 	if err != nil {
 		return nil, err
 	}
@@ -1045,6 +1105,9 @@ func (q *Queries) ListNisaContributions(ctx context.Context) ([]NisaContribution
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1053,11 +1116,11 @@ func (q *Queries) ListNisaContributions(ctx context.Context) ([]NisaContribution
 }
 
 const listNisaContributionsByFund = `-- name: ListNisaContributionsByFund :many
-SELECT id, contribution_date, amount, fund_id, contribution_type FROM nisa_contributions WHERE fund_id = $1 ORDER BY contribution_date
+SELECT id, contribution_date, amount, fund_id, contribution_type FROM nisa_contributions WHERE fund_id = ? ORDER BY contribution_date
 `
 
-func (q *Queries) ListNisaContributionsByFund(ctx context.Context, fundID int32) ([]NisaContribution, error) {
-	rows, err := q.db.Query(ctx, listNisaContributionsByFund, fundID)
+func (q *Queries) ListNisaContributionsByFund(ctx context.Context, fundID int64) ([]NisaContribution, error) {
+	rows, err := q.db.QueryContext(ctx, listNisaContributionsByFund, fundID)
 	if err != nil {
 		return nil, err
 	}
@@ -1076,6 +1139,9 @@ func (q *Queries) ListNisaContributionsByFund(ctx context.Context, fundID int32)
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1083,11 +1149,11 @@ func (q *Queries) ListNisaContributionsByFund(ctx context.Context, fundID int32)
 }
 
 const listScenarios = `-- name: ListScenarios :many
-SELECT id, run_at, params FROM scenarios ORDER BY run_at DESC LIMIT $1
+SELECT id, run_at, params FROM scenarios ORDER BY run_at DESC LIMIT ?
 `
 
-func (q *Queries) ListScenarios(ctx context.Context, limit int32) ([]Scenario, error) {
-	rows, err := q.db.Query(ctx, listScenarios, limit)
+func (q *Queries) ListScenarios(ctx context.Context, limit int64) ([]Scenario, error) {
+	rows, err := q.db.QueryContext(ctx, listScenarios, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1100,6 +1166,9 @@ func (q *Queries) ListScenarios(ctx context.Context, limit int32) ([]Scenario, e
 		}
 		items = append(items, i)
 	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -1108,26 +1177,25 @@ func (q *Queries) ListScenarios(ctx context.Context, limit int32) ([]Scenario, e
 
 const updateBigPurchase = `-- name: UpdateBigPurchase :one
 UPDATE big_purchases
-SET name = $2, base_amount = $3, base_date = $4, cycle_years = $5,
-    trade_in_value = $6, recurring = $7, financing_mode = $8
-WHERE id = $1
+SET name = ?, base_amount = ?, base_date = ?, cycle_years = ?,
+    trade_in_value = ?, recurring = ?, financing_mode = ?
+WHERE id = ?
 RETURNING id, name, base_amount, base_date, cycle_years, category_growth_rate, trade_in_value, recurring, financing_mode
 `
 
 type UpdateBigPurchaseParams struct {
-	ID            int32
 	Name          string
-	BaseAmount    int32
-	BaseDate      pgtype.Date
-	CycleYears    int32
-	TradeInValue  int32
+	BaseAmount    int64
+	BaseDate      time.Time
+	CycleYears    int64
+	TradeInValue  int64
 	Recurring     bool
 	FinancingMode string
+	ID            int64
 }
 
 func (q *Queries) UpdateBigPurchase(ctx context.Context, arg UpdateBigPurchaseParams) (BigPurchase, error) {
-	row := q.db.QueryRow(ctx, updateBigPurchase,
-		arg.ID,
+	row := q.db.QueryRowContext(ctx, updateBigPurchase,
 		arg.Name,
 		arg.BaseAmount,
 		arg.BaseDate,
@@ -1135,6 +1203,7 @@ func (q *Queries) UpdateBigPurchase(ctx context.Context, arg UpdateBigPurchasePa
 		arg.TradeInValue,
 		arg.Recurring,
 		arg.FinancingMode,
+		arg.ID,
 	)
 	var i BigPurchase
 	err := row.Scan(
@@ -1153,18 +1222,18 @@ func (q *Queries) UpdateBigPurchase(ctx context.Context, arg UpdateBigPurchasePa
 
 const updateBigPurchaseGrowthRate = `-- name: UpdateBigPurchaseGrowthRate :one
 UPDATE big_purchases
-SET category_growth_rate = $2
-WHERE id = $1
+SET category_growth_rate = ?
+WHERE id = ?
 RETURNING id, name, base_amount, base_date, cycle_years, category_growth_rate, trade_in_value, recurring, financing_mode
 `
 
 type UpdateBigPurchaseGrowthRateParams struct {
-	ID                 int32
-	CategoryGrowthRate pgtype.Numeric
+	CategoryGrowthRate sql.NullFloat64
+	ID                 int64
 }
 
 func (q *Queries) UpdateBigPurchaseGrowthRate(ctx context.Context, arg UpdateBigPurchaseGrowthRateParams) (BigPurchase, error) {
-	row := q.db.QueryRow(ctx, updateBigPurchaseGrowthRate, arg.ID, arg.CategoryGrowthRate)
+	row := q.db.QueryRowContext(ctx, updateBigPurchaseGrowthRate, arg.CategoryGrowthRate, arg.ID)
 	var i BigPurchase
 	err := row.Scan(
 		&i.ID,
@@ -1182,18 +1251,18 @@ func (q *Queries) UpdateBigPurchaseGrowthRate(ctx context.Context, arg UpdateBig
 
 const updateExpenseForecastOverride = `-- name: UpdateExpenseForecastOverride :one
 UPDATE expense_forecasts
-SET annual_cost = $2, is_override = true
-WHERE id = $1
+SET annual_cost = ?, is_override = true
+WHERE id = ?
 RETURNING id, family_member_id, stage, track, annual_cost, start_age, end_age, is_override
 `
 
 type UpdateExpenseForecastOverrideParams struct {
-	ID         int32
-	AnnualCost int32
+	AnnualCost int64
+	ID         int64
 }
 
 func (q *Queries) UpdateExpenseForecastOverride(ctx context.Context, arg UpdateExpenseForecastOverrideParams) (ExpenseForecast, error) {
-	row := q.db.QueryRow(ctx, updateExpenseForecastOverride, arg.ID, arg.AnnualCost)
+	row := q.db.QueryRowContext(ctx, updateExpenseForecastOverride, arg.AnnualCost, arg.ID)
 	var i ExpenseForecast
 	err := row.Scan(
 		&i.ID,
@@ -1211,20 +1280,20 @@ func (q *Queries) UpdateExpenseForecastOverride(ctx context.Context, arg UpdateE
 const upsertFundNavHistory = `-- name: UpsertFundNavHistory :one
 
 INSERT INTO fund_nav_history (fund_id, nav_date, nav_price)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 ON CONFLICT (fund_id, nav_date) DO UPDATE SET nav_price = EXCLUDED.nav_price
 RETURNING id, fund_id, nav_date, nav_price
 `
 
 type UpsertFundNavHistoryParams struct {
-	FundID   int32
-	NavDate  pgtype.Date
-	NavPrice int32
+	FundID   int64
+	NavDate  time.Time
+	NavPrice int64
 }
 
 // fund_nav_history -----------------------------------------------------------
 func (q *Queries) UpsertFundNavHistory(ctx context.Context, arg UpsertFundNavHistoryParams) (FundNavHistory, error) {
-	row := q.db.QueryRow(ctx, upsertFundNavHistory, arg.FundID, arg.NavDate, arg.NavPrice)
+	row := q.db.QueryRowContext(ctx, upsertFundNavHistory, arg.FundID, arg.NavDate, arg.NavPrice)
 	var i FundNavHistory
 	err := row.Scan(
 		&i.ID,
@@ -1239,22 +1308,22 @@ const upsertMonthlyRecord = `-- name: UpsertMonthlyRecord :one
 
 
 INSERT INTO monthly_records (record_month, income_monthly, bank_balance)
-VALUES ($1, $2, $3)
+VALUES (?, ?, ?)
 ON CONFLICT (record_month)
 DO UPDATE SET income_monthly = EXCLUDED.income_monthly, bank_balance = EXCLUDED.bank_balance
 RETURNING id, record_month, income_monthly, bank_balance, created_at
 `
 
 type UpsertMonthlyRecordParams struct {
-	RecordMonth   pgtype.Date
-	IncomeMonthly int32
-	BankBalance   int32
+	RecordMonth   time.Time
+	IncomeMonthly int64
+	BankBalance   int64
 }
 
 // Queries are added here alongside schema.sql as each table is implemented.
 // monthly_records --------------------------------------------------------
 func (q *Queries) UpsertMonthlyRecord(ctx context.Context, arg UpsertMonthlyRecordParams) (MonthlyRecord, error) {
-	row := q.db.QueryRow(ctx, upsertMonthlyRecord, arg.RecordMonth, arg.IncomeMonthly, arg.BankBalance)
+	row := q.db.QueryRowContext(ctx, upsertMonthlyRecord, arg.RecordMonth, arg.IncomeMonthly, arg.BankBalance)
 	var i MonthlyRecord
 	err := row.Scan(
 		&i.ID,

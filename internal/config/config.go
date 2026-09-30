@@ -9,7 +9,9 @@ import (
 // Config holds all runtime configuration. OIDC_* fields are only populated
 // (and required) when DisableOIDC is false.
 type Config struct {
-	Addr            string
+	Addr string
+	// DatabaseURL is a modernc.org/sqlite DSN — typically just a file path,
+	// optionally with query-string pragmas (e.g. "file:/data/glidepath.db").
 	DatabaseURL     string
 	AnthropicAPIKey string
 	DisableOIDC     bool

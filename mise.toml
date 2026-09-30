@@ -4,50 +4,33 @@ air = "latest"
 "go:golang.org/x/tools/cmd/goimports" = "latest"
 
 [env]
-# Matches docker-compose.yml's dev-only Postgres credentials. Only used by
+# A plain file path — SQLite needs no server/container, so `mise run dev`
+# just migrates this file in place before starting Air. Only used by
 # `mise run dev`/`ci-test`; production sets DATABASE_URL itself.
-DATABASE_URL = "postgres://glidepath:glidepath@127.0.0.1:5432/glidepath?sslmode=disable"
-# db-test service (docker-compose.yml) — isolated DB for
-# `mise run test-integration`, never touched by manual `mise run dev` use.
-TEST_DATABASE_URL = "postgres://glidepath:glidepath@127.0.0.1:15432/glidepath?sslmode=disable"
+DATABASE_URL = "{{config_root}}/glidepath-dev.db"
+# Isolated scratch file for `mise run test-integration`, reset (deleted +
+# re-migrated) before every run so it never touches dev data.
+TEST_DATABASE_URL = "{{config_root}}/glidepath-test.db"
 
 [tasks.dev]
 run = """
-  mise run db-up &&
+  mise run db-migrate &&
   air
 """
 
-[tasks.db-up]
-run = """
-  go run ./tools/devdb up &&
-  mise run db-migrate
-"""
-
-[tasks.db-down]
-run = "go run ./tools/devdb down"
-
 [tasks.db-reset]
 run = """
-  go run ./tools/devdb reset &&
+  rm -f "$DATABASE_URL" &&
   mise run db-migrate
 """
 
 [tasks.db-migrate]
-run = "go run github.com/pressly/goose/v3/cmd/goose -dir internal/database/migrations postgres \"$DATABASE_URL\" up"
-
-[tasks.test-db-up]
-run = "go run ./tools/devdb up db-test"
-
-[tasks.test-db-down]
-run = "go run ./tools/devdb down db-test"
-
-[tasks.test-db-reset]
-run = "go run ./tools/devdb reset db-test"
+run = "go run github.com/pressly/goose/v3/cmd/goose -dir internal/database/migrations sqlite3 \"$DATABASE_URL\" up"
 
 [tasks.test-integration]
 run = """
-  mise run test-db-reset &&
-  go run github.com/pressly/goose/v3/cmd/goose -dir internal/database/migrations postgres "$TEST_DATABASE_URL" up &&
+  rm -f "$TEST_DATABASE_URL" &&
+  go run github.com/pressly/goose/v3/cmd/goose -dir internal/database/migrations sqlite3 "$TEST_DATABASE_URL" up &&
   DATABASE_URL="$TEST_DATABASE_URL" go test -tags=integration ./...
 """
 

@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/ShotaKitazawa/glidepath/internal/calc"
 	"github.com/ShotaKitazawa/glidepath/internal/database/sqlcgen"
 	"github.com/ShotaKitazawa/glidepath/internal/web"
@@ -34,9 +32,9 @@ func registerInventory(mux *http.ServeMux, q *sqlcgen.Queries) {
 
 type inventoryRow struct {
 	Month             string
-	IncomeThousandYen int32
-	BankBalance       int32
-	ExpenseTotal      int32
+	IncomeThousandYen int64
+	BankBalance       int64
+	ExpenseTotal      int64
 }
 
 // buildInventoryRows summarizes every monthly_records row (most recent
@@ -50,12 +48,12 @@ func buildInventoryRows(ctx context.Context, q *sqlcgen.Queries, records []sqlcg
 		if err != nil {
 			return nil, err
 		}
-		var total int32
+		var total int64
 		for _, c := range cats {
 			total += c.Amount
 		}
 		rows = append(rows, inventoryRow{
-			Month:             rec.RecordMonth.Time.Format("2006-01"),
+			Month:             rec.RecordMonth.Format("2006-01"),
 			IncomeThousandYen: toThousandYen(int(rec.IncomeMonthly)),
 			BankBalance:       toThousandYen(int(rec.BankBalance)),
 			ExpenseTotal:      toThousandYen(int(total)),
@@ -96,25 +94,25 @@ func inventoryHistory(q *sqlcgen.Queries) http.HandlerFunc {
 // PrefillThousandYen carries the existing contribution for whichever month
 // is being edited (0 when creating a new entry, or when there wasn't one).
 type inventoryFundOption struct {
-	ID                 int32
+	ID                 int64
 	Name               string
-	PrefillThousandYen int32
+	PrefillThousandYen int64
 	PrefillIsSpot      bool
 }
 
 // inventoryBankAccountOption is a registered bank account offered on the
 // monthly form. PrefillThousandYen mirrors inventoryFundOption's.
 type inventoryBankAccountOption struct {
-	ID                 int32
+	ID                 int64
 	Name               string
-	PrefillThousandYen int32
+	PrefillThousandYen int64
 }
 
 // recentIncome is one past month's 収入, offered as a quick-fill
 // button on the monthly form.
 type recentIncome struct {
 	Month             string
-	IncomeThousandYen int32
+	IncomeThousandYen int64
 }
 
 // expenseItemView is one labeled expense line item — used both for
@@ -122,7 +120,7 @@ type recentIncome struct {
 // row form when editing an existing month.
 type expenseItemView struct {
 	Label       string
-	ThousandYen int32
+	ThousandYen int64
 }
 
 type inventoryPageData struct {
@@ -137,8 +135,8 @@ type inventoryPageData struct {
 	// month's data (GET /inventory?month=YYYY-MM), as opposed to starting
 	// blank for a new entry.
 	IsEditing                     bool
-	PrefillIncomeThousandYen      int32
-	PrefillBankBalanceThousandYen int32
+	PrefillIncomeThousandYen      int64
+	PrefillBankBalanceThousandYen int64
 	PrefillExpenseItems           []expenseItemView
 	Success                       string
 	Error                         string
@@ -162,7 +160,7 @@ func renderInventory(w http.ResponseWriter, ctx context.Context, q *sqlcgen.Quer
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		previousExpenseMonth = records[0].RecordMonth.Time.Format("2006-01")
+		previousExpenseMonth = records[0].RecordMonth.Format("2006-01")
 		previousExpenseItems = make([]expenseItemView, 0, len(cats))
 		for _, c := range cats {
 			previousExpenseItems = append(previousExpenseItems, expenseItemView{
@@ -180,7 +178,7 @@ func renderInventory(w http.ResponseWriter, ctx context.Context, q *sqlcgen.Quer
 			break
 		}
 		recentIncomes = append(recentIncomes, recentIncome{
-			Month:             rec.RecordMonth.Time.Format("2006-01"),
+			Month:             rec.RecordMonth.Format("2006-01"),
 			IncomeThousandYen: toThousandYen(int(rec.IncomeMonthly)),
 		})
 	}
@@ -209,7 +207,7 @@ func renderInventory(w http.ResponseWriter, ctx context.Context, q *sqlcgen.Quer
 	// 「空の状態」自体に意味がないため。他の月へは /inventory/history から。
 	var editingRec *sqlcgen.MonthlyRecord
 	for i := range records {
-		if records[i].RecordMonth.Time.Format("2006-01") == targetMonth {
+		if records[i].RecordMonth.Format("2006-01") == targetMonth {
 			editingRec = &records[i]
 			break
 		}
@@ -248,7 +246,7 @@ func renderInventory(w http.ResponseWriter, ctx context.Context, q *sqlcgen.Quer
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		balanceByAccount := make(map[int32]int32, len(balances))
+		balanceByAccount := make(map[int64]int64, len(balances))
 		for _, b := range balances {
 			balanceByAccount[b.BankAccountID] = toThousandYen(int(b.Amount))
 		}
@@ -325,7 +323,7 @@ func inventoryCreate(q *sqlcgen.Queries) http.HandlerFunc {
 			return
 		}
 		var bankBalanceThousand int
-		accountBalances := make(map[int32]int) // bank_account_id -> 千円
+		accountBalances := make(map[int64]int) // bank_account_id -> 千円
 		if len(accounts) > 0 {
 			for _, a := range accounts {
 				amountStr := r.FormValue(fmt.Sprintf("account_%d", a.ID))
@@ -346,7 +344,7 @@ func inventoryCreate(q *sqlcgen.Queries) http.HandlerFunc {
 		}
 
 		rec, err := q.UpsertMonthlyRecord(r.Context(), sqlcgen.UpsertMonthlyRecordParams{
-			RecordMonth:   pgtype.Date{Time: month, Valid: true},
+			RecordMonth:   month,
 			IncomeMonthly: fromThousandYen(incomeMonthly),
 			BankBalance:   fromThousandYen(bankBalanceThousand),
 		})
@@ -403,7 +401,7 @@ func inventoryCreate(q *sqlcgen.Queries) http.HandlerFunc {
 		for _, fund := range funds {
 			if err := q.DeleteNisaContributionByFundAndDate(r.Context(), sqlcgen.DeleteNisaContributionByFundAndDateParams{
 				FundID:           fund.ID,
-				ContributionDate: pgtype.Date{Time: month, Valid: true},
+				ContributionDate: month,
 			}); err != nil {
 				reRender(fmt.Sprintf("NISA拠出の保存に失敗しました: %v", err))
 				return
@@ -422,7 +420,7 @@ func inventoryCreate(q *sqlcgen.Queries) http.HandlerFunc {
 				contributionType = calc.ContributionSpot
 			}
 			if _, err := q.CreateNisaContribution(r.Context(), sqlcgen.CreateNisaContributionParams{
-				ContributionDate: pgtype.Date{Time: month, Valid: true},
+				ContributionDate: month,
 				Amount:           fromThousandYen(amount),
 				FundID:           fund.ID,
 				ContributionType: string(contributionType),

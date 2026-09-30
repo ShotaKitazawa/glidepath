@@ -9,4 +9,4 @@ ALTER TABLE nisa_contributions ADD COLUMN contribution_type TEXT NOT NULL DEFAUL
 
 -- +goose Down
 
-ALTER TABLE nisa_contributions DROP COLUMN IF EXISTS contribution_type;
+ALTER TABLE nisa_contributions DROP COLUMN contribution_type;

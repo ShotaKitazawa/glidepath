@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/ShotaKitazawa/glidepath/internal/calc"
 	"github.com/ShotaKitazawa/glidepath/internal/database/sqlcgen"
 )
@@ -38,19 +36,19 @@ func registerFamily(mux *http.ServeMux, q *sqlcgen.Queries) {
 }
 
 type familyMemberView struct {
-	ID        int32
+	ID        int64
 	Relation  string
 	Birth     string
 	Forecasts []forecastView
 }
 
 type forecastView struct {
-	ID         int32
+	ID         int64
 	Stage      string
 	Track      string
-	StartAge   int32
-	EndAge     int32
-	AnnualCost int32
+	StartAge   int64
+	EndAge     int64
+	AnnualCost int64
 	IsOverride bool
 }
 
@@ -83,7 +81,7 @@ func loadFamilyView(ctx context.Context, q *sqlcgen.Queries) ([]familyMemberView
 		views = append(views, familyMemberView{
 			ID:        m.ID,
 			Relation:  m.Relation,
-			Birth:     m.BirthMonth.Time.Format("2006-01"),
+			Birth:     m.BirthMonth.Format("2006-01"),
 			Forecasts: fv,
 		})
 	}
@@ -118,7 +116,7 @@ func familyCreate(q *sqlcgen.Queries) http.HandlerFunc {
 
 		member, err := q.CreateFamilyMember(r.Context(), sqlcgen.CreateFamilyMemberParams{
 			Relation:   relation,
-			BirthMonth: pgtype.Date{Time: birth, Valid: true},
+			BirthMonth: birth,
 		})
 		if err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("保存に失敗しました: %v", err))
@@ -142,9 +140,9 @@ func familyCreate(q *sqlcgen.Queries) http.HandlerFunc {
 				FamilyMemberID: member.ID,
 				Stage:          stage,
 				Track:          stageTrack,
-				AnnualCost:     int32(annualCost),
-				StartAge:       int32(startAge),
-				EndAge:         int32(endAge),
+				AnnualCost:     int64(annualCost),
+				StartAge:       int64(startAge),
+				EndAge:         int64(endAge),
 			}); err != nil {
 				renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("教育費予測の作成に失敗しました: %v", err))
 				return
@@ -172,7 +170,7 @@ func forecastOverride(q *sqlcgen.Queries) http.HandlerFunc {
 			return
 		}
 		if _, err := q.UpdateExpenseForecastOverride(r.Context(), sqlcgen.UpdateExpenseForecastOverrideParams{
-			ID:         int32(id),
+			ID:         int64(id),
 			AnnualCost: fromThousandYen(annualCost),
 		}); err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("更新に失敗しました: %v", err))
@@ -189,7 +187,7 @@ func familyDelete(q *sqlcgen.Queries) http.HandlerFunc {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
-		if err := q.DeleteFamilyMember(r.Context(), int32(id)); err != nil {
+		if err := q.DeleteFamilyMember(r.Context(), int64(id)); err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("削除に失敗しました: %v", err))
 			return
 		}

@@ -4,12 +4,12 @@
 -- ごとに残高を入力する」構造（SPEC.md 6章）。monthly_records.bank_balance は
 -- 引き続き存在し、口座ごとの残高の合計を保存する（計算エンジンはそちらだけを見る）。
 CREATE TABLE bank_accounts (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL
 );
 
 CREATE TABLE bank_account_balances (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     monthly_record_id INTEGER NOT NULL REFERENCES monthly_records(id) ON DELETE CASCADE,
     bank_account_id INTEGER NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
     amount INTEGER NOT NULL,
@@ -21,5 +21,5 @@ CREATE INDEX idx_bank_account_balances_bank_account_id ON bank_account_balances(
 
 -- +goose Down
 
-DROP TABLE IF EXISTS bank_account_balances CASCADE;
-DROP TABLE IF EXISTS bank_accounts CASCADE;
+DROP TABLE IF EXISTS bank_account_balances;
+DROP TABLE IF EXISTS bank_accounts;

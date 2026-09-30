@@ -3,13 +3,13 @@ package config
 import "testing"
 
 func TestLoad_DisableOIDC_OnlyRequiresDatabaseURL(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://localhost/glidepath")
+	t.Setenv("DATABASE_URL", "/tmp/glidepath.db")
 
 	cfg, err := Load(":8080", true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.DatabaseURL != "postgres://localhost/glidepath" {
+	if cfg.DatabaseURL != "/tmp/glidepath.db" {
 		t.Errorf("DatabaseURL = %q", cfg.DatabaseURL)
 	}
 }
@@ -22,7 +22,7 @@ func TestLoad_MissingDatabaseURL(t *testing.T) {
 }
 
 func TestLoad_OIDCEnabled_RequiresOIDCVars(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://localhost/glidepath")
+	t.Setenv("DATABASE_URL", "/tmp/glidepath.db")
 	t.Setenv("OIDC_ISSUER", "")
 	t.Setenv("OIDC_AUDIENCE", "")
 	t.Setenv("OIDC_CLIENT_ID", "")

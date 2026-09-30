@@ -1,10 +1,10 @@
 //go:build integration
 
-// Integration tests exercise the full HTTP stack (Register → real Postgres)
+// Integration tests exercise the full HTTP stack (Register → real SQLite)
 // end to end — the flow this package's manual curl-based verification kept
 // covering by hand. Run via `mise run test-integration`, which points
-// DATABASE_URL at docker-compose.yml's isolated db-test service so these
-// runs never touch data used for manual verification (see mise.toml).
+// DATABASE_URL at a fresh scratch SQLite file so these runs never touch the
+// file used for manual verification (see mise.toml).
 //
 // Excluded on purpose: anything that calls the real MUFG API
 // (POST /funds/{id}/sync-nav) — network-dependent, slow, and unreliable to
@@ -14,6 +14,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,8 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "modernc.org/sqlite"
 
 	"github.com/ShotaKitazawa/glidepath/internal/calc"
 	"github.com/ShotaKitazawa/glidepath/internal/database/sqlcgen"
@@ -39,18 +39,20 @@ func newIntegrationServer(t *testing.T) (*httptest.Server, *sqlcgen.Queries) {
 		t.Fatal("DATABASE_URL must be set (run via `mise run test-integration`)")
 	}
 
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dbURL)
+	db, err := sql.Open("sqlite", dbURL)
 	if err != nil {
-		t.Fatalf("connecting to database: %v", err)
+		t.Fatalf("opening database: %v", err)
 	}
-	t.Cleanup(pool.Close)
+	t.Cleanup(func() { db.Close() })
 
-	if err := pool.Ping(ctx); err != nil {
+	if err := db.PingContext(context.Background()); err != nil {
 		t.Fatalf("pinging database: %v", err)
 	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatalf("enabling foreign keys: %v", err)
+	}
 
-	q := sqlcgen.New(pool)
+	q := sqlcgen.New(db)
 
 	mux := http.NewServeMux()
 	Register(mux, q)
@@ -132,7 +134,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		}
 		var rec *sqlcgen.MonthlyRecord
 		for i := range records {
-			if records[i].RecordMonth.Time.Format("2006-01") == "2026-08" {
+			if records[i].RecordMonth.Format("2006-01") == "2026-08" {
 				rec = &records[i]
 			}
 		}
@@ -150,7 +152,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ListExpenseCategoriesByMonthlyRecord: %v", err)
 		}
-		want := map[string]int32{"食費": 150000, "日用品": 80000, "交通費": 50000}
+		want := map[string]int64{"食費": 150000, "日用品": 80000, "交通費": 50000}
 		if len(cats) != len(want) {
 			t.Fatalf("got %d expense_categories rows, want %d: %+v", len(cats), len(want), cats)
 		}
@@ -221,7 +223,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		}
 	})
 
-	var bigPurchaseID int32
+	var bigPurchaseID int64
 	t.Run("assumptions: big purchase edit prefills the form and update persists all fields", func(t *testing.T) {
 		purchases, err := q.ListBigPurchases(context.Background())
 		if err != nil || len(purchases) == 0 {
@@ -269,7 +271,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		}
 	})
 
-	var fundID int32
+	var fundID int64
 	t.Run("assumptions: NISA fund", func(t *testing.T) {
 		resp := postForm(t, client, srv.URL+"/funds", url.Values{
 			"fund_name": {"eMAXIS Slim 米国株式（S&P500）"},
@@ -339,7 +341,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		}
 	})
 
-	var accountID int32
+	var accountID int64
 	t.Run("assumptions: bank account", func(t *testing.T) {
 		resp := postForm(t, client, srv.URL+"/bank-accounts", url.Values{
 			"account_name": {"個人口座"},
@@ -420,7 +422,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		}
 		var forMonth []sqlcgen.NisaContribution
 		for _, c := range contributions {
-			if c.ContributionDate.Time.Format("2006-01") == "2026-08" {
+			if c.ContributionDate.Format("2006-01") == "2026-08" {
 				forMonth = append(forMonth, c)
 			}
 		}
@@ -452,7 +454,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		}
 		var rec *sqlcgen.MonthlyRecord
 		for i := range records {
-			if records[i].RecordMonth.Time.Format("2006-01") == "2026-09" {
+			if records[i].RecordMonth.Format("2006-01") == "2026-09" {
 				rec = &records[i]
 			}
 		}
@@ -512,15 +514,15 @@ func TestIntegration_FullFlow(t *testing.T) {
 			price += (i % 7) - 3 // small deterministic wiggle so returns aren't all zero
 			if _, err := q.UpsertFundNavHistory(ctx, sqlcgen.UpsertFundNavHistoryParams{
 				FundID:   fundID,
-				NavDate:  pgtype.Date{Time: d, Valid: true},
-				NavPrice: int32(price),
+				NavDate:  d,
+				NavPrice: int64(price),
 			}); err != nil {
 				t.Fatalf("UpsertFundNavHistory: %v", err)
 			}
 		}
 
 		if _, err := q.CreateNisaContribution(ctx, sqlcgen.CreateNisaContributionParams{
-			ContributionDate: pgtype.Date{Time: base, Valid: true},
+			ContributionDate: base,
 			Amount:           100000,
 			FundID:           fundID,
 			ContributionType: string(calc.ContributionRecurring),
@@ -559,7 +561,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 
 		contrib, err := q.GetNisaContributionByFundAndDate(ctx, sqlcgen.GetNisaContributionByFundAndDateParams{
 			FundID:           fundID,
-			ContributionDate: pgtype.Date{Time: asOf, Valid: true},
+			ContributionDate: asOf,
 		})
 		if err != nil {
 			t.Fatalf("GetNisaContributionByFundAndDate: %v", err)
@@ -573,7 +575,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 			t.Fatalf("ListMonthlyRecords: %v", err)
 		}
 		for _, rec := range records {
-			if rec.RecordMonth.Time.Format("2006-01") == "2025-06" {
+			if rec.RecordMonth.Format("2006-01") == "2025-06" {
 				t.Errorf("did not expect a monthly_records row for 2025-06 as a side effect, got %+v", rec)
 			}
 		}
@@ -585,7 +587,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		})
 		updated, err := q.GetNisaContributionByFundAndDate(ctx, sqlcgen.GetNisaContributionByFundAndDateParams{
 			FundID:           fundID,
-			ContributionDate: pgtype.Date{Time: asOf, Valid: true},
+			ContributionDate: asOf,
 		})
 		if err != nil {
 			t.Fatalf("GetNisaContributionByFundAndDate after resubmit: %v", err)
@@ -609,7 +611,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		}
 	})
 
-	var proxiedFundID int32
+	var proxiedFundID int64
 	t.Run("a fund can proxy another fund's NAV history instead of syncing its own", func(t *testing.T) {
 		ctx := context.Background()
 
@@ -638,7 +640,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		if proxied == nil {
 			t.Fatal("iFree fund not found after creating it")
 		}
-		if !proxied.NavProxyFundID.Valid || proxied.NavProxyFundID.Int32 != fundID {
+		if !proxied.NavProxyFundID.Valid || proxied.NavProxyFundID.Int64 != fundID {
 			t.Errorf("nav_proxy_fund_id = %+v, want %d", proxied.NavProxyFundID, fundID)
 		}
 		if proxied.IsinOrCode.Valid {

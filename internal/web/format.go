@@ -19,15 +19,15 @@ var funcMap = template.FuncMap{
 // formatThousandYen renders a value stored in thousand-yen units (as most
 // of this app's view structs are, per internal/handler/money.go) as an
 // actual-yen string with thousands separators, e.g. 2114 -> "2,114,000".
-func formatThousandYen(thousandYen int32) string {
-	return commaYen(int64(thousandYen) * 1000)
+func formatThousandYen(thousandYen int64) string {
+	return commaYen(thousandYen * 1000)
 }
 
 // formatRawYen renders a value already in yen (e.g. a fund's NAV price,
 // which money.go deliberately keeps unconverted) with thousands
 // separators, e.g. 43966 -> "43,966".
-func formatRawYen(rawYen int32) string {
-	return commaYen(int64(rawYen))
+func formatRawYen(rawYen int64) string {
+	return commaYen(rawYen)
 }
 
 func commaYen(yen int64) string {

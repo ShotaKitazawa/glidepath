@@ -55,7 +55,7 @@ func buildSimulationInput(ctx context.Context, q *sqlcgen.Queries) (*simulationI
 		return nil, fmt.Errorf("先に今月の記録を入力してください")
 	}
 	latest := records[0] // ListMonthlyRecords orders by record_month DESC
-	currentYear := latest.RecordMonth.Time.Year()
+	currentYear := latest.RecordMonth.Year()
 	annualIncome := int(latest.IncomeMonthly) * 12
 
 	history, err := historicalAnnualExpenses(ctx, q, records)
@@ -70,11 +70,11 @@ func buildSimulationInput(ctx context.Context, q *sqlcgen.Queries) (*simulationI
 
 	monthsRecordedThisYear := 0
 	for _, rec := range records {
-		if rec.RecordMonth.Time.Year() == currentYear {
+		if rec.RecordMonth.Year() == currentYear {
 			monthsRecordedThisYear++
 		}
 	}
-	initialNISAYen, monthlyReturns, annualNISAContribution := nisaState(fundHistories, currentYear, monthsRecordedThisYear, latest.RecordMonth.Time)
+	initialNISAYen, monthlyReturns, annualNISAContribution := nisaState(fundHistories, currentYear, monthsRecordedThisYear, latest.RecordMonth)
 
 	actualPoints, err := actualNetWorthByYear(records, fundHistories)
 	if err != nil {
@@ -93,7 +93,7 @@ func buildSimulationInput(ctx context.Context, q *sqlcgen.Queries) (*simulationI
 
 	totalContributedYen := 0
 	for _, fh := range fundHistories {
-		totalContributedYen += totalContributedAsOf(fh, latest.RecordMonth.Time)
+		totalContributedYen += totalContributedAsOf(fh, latest.RecordMonth)
 	}
 
 	// Plans cover only years after the last ActualPoints year: that year's
@@ -146,7 +146,7 @@ func historicalAnnualExpenses(ctx context.Context, q *sqlcgen.Queries, records [
 		for _, c := range cats {
 			total += int(c.Amount)
 		}
-		year := rec.RecordMonth.Time.Year()
+		year := rec.RecordMonth.Year()
 		bucket := yearTotals[year]
 		bucket.total += total
 		bucket.months++
@@ -184,7 +184,7 @@ func loadFundHistories(ctx context.Context, q *sqlcgen.Queries) ([]fundHistory, 
 		}
 		nav := make([]calc.NAVPoint, len(navRows))
 		for i, n := range navRows {
-			nav[i] = calc.NAVPoint{Date: n.NavDate.Time, PriceYen: int(n.NavPrice)}
+			nav[i] = calc.NAVPoint{Date: n.NavDate, PriceYen: int(n.NavPrice)}
 		}
 
 		contribRows, err := q.ListNisaContributionsByFund(ctx, fund.ID)
@@ -194,7 +194,7 @@ func loadFundHistories(ctx context.Context, q *sqlcgen.Queries) ([]fundHistory, 
 		contributions := make([]calc.Contribution, len(contribRows))
 		for i, c := range contribRows {
 			contributions[i] = calc.Contribution{
-				Date:      c.ContributionDate.Time,
+				Date:      c.ContributionDate,
 				AmountYen: int(c.Amount),
 				Kind:      calc.ContributionKind(c.ContributionType),
 			}
@@ -303,7 +303,7 @@ func actualNetWorthByYear(records []sqlcgen.MonthlyRecord, fundHistories []fundH
 	// first record seen for a given year is that year's latest month.
 	latestByYear := map[int]sqlcgen.MonthlyRecord{}
 	for _, rec := range records {
-		year := rec.RecordMonth.Time.Year()
+		year := rec.RecordMonth.Year()
 		if _, exists := latestByYear[year]; !exists {
 			latestByYear[year] = rec
 		}
@@ -311,7 +311,7 @@ func actualNetWorthByYear(records []sqlcgen.MonthlyRecord, fundHistories []fundH
 
 	points := make([]actualPoint, 0, len(latestByYear))
 	for year, rec := range latestByYear {
-		asOf := rec.RecordMonth.Time
+		asOf := rec.RecordMonth
 		nisaYen := 0
 		for _, fh := range fundHistories {
 			valuation, ok := nisaValuationAsOf(fh, asOf)
@@ -347,7 +347,7 @@ func familyEducationData(ctx context.Context, q *sqlcgen.Queries) ([]memberEduca
 		for i, f := range forecasts {
 			rows[i] = calc.ExpenseForecastRow{StartAge: int(f.StartAge), EndAge: int(f.EndAge), AnnualCostYen: int(f.AnnualCost)}
 		}
-		data = append(data, memberEducationData{birthYear: m.BirthMonth.Time.Year(), rows: rows})
+		data = append(data, memberEducationData{birthYear: m.BirthMonth.Year(), rows: rows})
 	}
 	return data, nil
 }
@@ -362,12 +362,10 @@ func bigPurchaseData(ctx context.Context, q *sqlcgen.Queries) ([]calc.BigPurchas
 	for i, bp := range rows {
 		rate := 0.0
 		if bp.CategoryGrowthRate.Valid {
-			if f, err := bp.CategoryGrowthRate.Float64Value(); err == nil && f.Valid {
-				rate = f.Float64
-			}
+			rate = bp.CategoryGrowthRate.Float64
 		}
 		purchases[i] = calc.BigPurchase{
-			BaseDate:        bp.BaseDate.Time,
+			BaseDate:        bp.BaseDate,
 			BaseAmountYen:   int(bp.BaseAmount),
 			CycleYears:      int(bp.CycleYears),
 			GrowthRate:      rate,

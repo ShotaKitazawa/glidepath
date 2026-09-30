@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 cmd = "go build -o ./tmp/glidepath ./cmd/server"
 entrypoint = ["./tmp/glidepath", "--disable-oidc"]
 include_ext = ["go", "html"]
-exclude_dir = ["tmp", "hack", "tools"]
+exclude_dir = ["tmp", "hack"]
 
 [misc]
 clean_on_exit = true

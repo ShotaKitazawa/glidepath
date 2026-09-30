@@ -31,16 +31,16 @@ func registerHome(mux *http.ServeMux, q *sqlcgen.Queries) {
 
 type simulationPointView struct {
 	Year int32
-	P10  int32
-	P50  int32
-	P90  int32
+	P10  int64
+	P50  int64
+	P90  int64
 }
 
 // actualPointView is one year's actual (non-simulated) net worth, in
 // thousand yen — see simulation_input.go's actualPoint.
 type actualPointView struct {
 	Year        int32
-	NetWorthYen int32
+	NetWorthYen int64
 }
 
 type homePageData struct {

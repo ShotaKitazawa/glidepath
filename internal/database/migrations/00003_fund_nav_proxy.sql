@@ -9,4 +9,4 @@ ALTER TABLE funds ADD COLUMN nav_proxy_fund_id INTEGER REFERENCES funds(id) ON D
 
 -- +goose Down
 
-ALTER TABLE funds DROP COLUMN IF EXISTS nav_proxy_fund_id;
+ALTER TABLE funds DROP COLUMN nav_proxy_fund_id;

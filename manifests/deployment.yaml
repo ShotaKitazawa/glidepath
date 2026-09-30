@@ -20,6 +20,9 @@ spec:
           envFrom:
             - secretRef:
                 name: glidepath-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /data
           readinessProbe:
             httpGet:
               path: /healthz
@@ -28,3 +31,10 @@ spec:
             httpGet:
               path: /healthz
               port: 8080
+      volumes:
+        - name: data
+          # SQLite data file (DATABASE_URL, see secret.yaml.example) — a
+          # deployer that needs it to survive pod restarts replaces this
+          # with a PersistentVolumeClaim (see the sibling app kondate's
+          # home-monorepo overlay for that pattern).
+          emptyDir: {}

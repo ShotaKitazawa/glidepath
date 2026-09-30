@@ -21,9 +21,9 @@ func registerBankAccounts(mux *http.ServeMux, q *sqlcgen.Queries) {
 }
 
 type bankAccountView struct {
-	ID                       int32
+	ID                       int64
 	Name                     string
-	LatestBalanceThousandYen int32
+	LatestBalanceThousandYen int64
 	HasLatestBalance         bool
 }
 
@@ -75,7 +75,7 @@ func bankAccountDelete(q *sqlcgen.Queries) http.HandlerFunc {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
-		if err := q.DeleteBankAccount(r.Context(), int32(id)); err != nil {
+		if err := q.DeleteBankAccount(r.Context(), int64(id)); err != nil {
 			renderAssumptionsError(w, r.Context(), q, fmt.Sprintf("削除に失敗しました: %v", err))
 			return
 		}

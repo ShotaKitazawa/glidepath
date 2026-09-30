@@ -8,14 +8,14 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "modernc.org/sqlite"
 
 	"github.com/ShotaKitazawa/glidepath/internal/database/sqlcgen"
 	"github.com/ShotaKitazawa/glidepath/internal/mufg"
@@ -59,14 +59,14 @@ func run(fundID int, fromStr, toStr string, delay time.Duration) error {
 	}
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, databaseURL)
+	db, err := sql.Open("sqlite", databaseURL)
 	if err != nil {
 		return fmt.Errorf("connecting to database: %w", err)
 	}
-	defer pool.Close()
-	q := sqlcgen.New(pool)
+	defer db.Close()
+	q := sqlcgen.New(db)
 
-	fund, err := q.GetFund(ctx, int32(fundID))
+	fund, err := q.GetFund(ctx, int64(fundID))
 	if err != nil {
 		return fmt.Errorf("looking up fund %d: %w", fundID, err)
 	}
@@ -83,8 +83,8 @@ func run(fundID int, fromStr, toStr string, delay time.Duration) error {
 	for _, quote := range quotes {
 		if _, err := q.UpsertFundNavHistory(ctx, sqlcgen.UpsertFundNavHistoryParams{
 			FundID:   fund.ID,
-			NavDate:  pgtype.Date{Time: quote.Date, Valid: true},
-			NavPrice: int32(quote.NAVYen),
+			NavDate:  quote.Date,
+			NavPrice: int64(quote.NAVYen),
 		}); err != nil {
 			return fmt.Errorf("saving quote for %s: %w", quote.Date.Format("2006-01-02"), err)
 		}

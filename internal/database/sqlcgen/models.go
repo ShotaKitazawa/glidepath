@@ -5,127 +5,128 @@
 package sqlcgen
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
+	"time"
 )
 
 type BankAccount struct {
-	ID   int32
+	ID   int64
 	Name string
 }
 
 type BankAccountBalance struct {
-	ID              int32
-	MonthlyRecordID int32
-	BankAccountID   int32
-	Amount          int32
+	ID              int64
+	MonthlyRecordID int64
+	BankAccountID   int64
+	Amount          int64
 }
 
 type BigPurchase struct {
-	ID                 int32
+	ID                 int64
 	Name               string
-	BaseAmount         int32
-	BaseDate           pgtype.Date
-	CycleYears         int32
-	CategoryGrowthRate pgtype.Numeric
-	TradeInValue       int32
+	BaseAmount         int64
+	BaseDate           time.Time
+	CycleYears         int64
+	CategoryGrowthRate sql.NullFloat64
+	TradeInValue       int64
 	Recurring          bool
 	FinancingMode      string
 }
 
 type ChatMessage struct {
-	ID        int32
-	SessionID int32
+	ID        int64
+	SessionID int64
 	Role      string
 	Content   string
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }
 
 type ChatSession struct {
-	ID               int32
-	StartedAt        pgtype.Timestamptz
-	ContextSummaryID pgtype.Int4
+	ID               int64
+	StartedAt        time.Time
+	ContextSummaryID sql.NullInt64
 }
 
 type ContextSummary struct {
-	ID          int32
-	GeneratedAt pgtype.Timestamptz
-	ScenarioID  pgtype.Int4
-	SummaryJson []byte
+	ID          int64
+	GeneratedAt time.Time
+	ScenarioID  sql.NullInt64
+	SummaryJson string
 }
 
 type ExpenseCategory struct {
-	ID              int32
-	MonthlyRecordID int32
+	ID              int64
+	MonthlyRecordID int64
 	Category        string
-	Amount          int32
+	Amount          int64
 }
 
 type ExpenseForecast struct {
-	ID             int32
-	FamilyMemberID int32
+	ID             int64
+	FamilyMemberID int64
 	Stage          string
 	Track          string
-	AnnualCost     int32
-	StartAge       int32
-	EndAge         int32
+	AnnualCost     int64
+	StartAge       int64
+	EndAge         int64
 	IsOverride     bool
 }
 
 type FamilyMember struct {
-	ID         int32
+	ID         int64
 	Relation   string
-	BirthMonth pgtype.Date
+	BirthMonth time.Time
 }
 
 type ForecastResult struct {
-	ID         int32
-	ScenarioID int32
-	Year       int32
-	P10        int32
-	P50        int32
-	P90        int32
+	ID         int64
+	ScenarioID int64
+	Year       int64
+	P10        int64
+	P50        int64
+	P90        int64
 }
 
 type Fund struct {
-	ID             int32
+	ID             int64
 	Name           string
-	IsinOrCode     pgtype.Text
-	NavSourceUrl   pgtype.Text
-	NavProxyFundID pgtype.Int4
+	IsinOrCode     sql.NullString
+	NavSourceUrl   sql.NullString
+	NavProxyFundID sql.NullInt64
 }
 
 type FundNavHistory struct {
-	ID       int32
-	FundID   int32
-	NavDate  pgtype.Date
-	NavPrice int32
+	ID       int64
+	FundID   int64
+	NavDate  time.Time
+	NavPrice int64
 }
 
 type Goal struct {
-	ID          int32
+	ID          int64
 	GoalType    string
-	TargetValue pgtype.Numeric
-	TargetDate  pgtype.Date
+	TargetValue float64
+	TargetDate  sql.NullTime
 }
 
 type MonthlyRecord struct {
-	ID            int32
-	RecordMonth   pgtype.Date
-	IncomeMonthly int32
-	BankBalance   int32
-	CreatedAt     pgtype.Timestamptz
+	ID            int64
+	RecordMonth   time.Time
+	IncomeMonthly int64
+	BankBalance   int64
+	CreatedAt     time.Time
 }
 
 type NisaContribution struct {
-	ID               int32
-	ContributionDate pgtype.Date
-	Amount           int32
-	FundID           int32
+	ID               int64
+	ContributionDate time.Time
+	Amount           int64
+	FundID           int64
 	ContributionType string
 }
 
 type Scenario struct {
-	ID     int32
-	RunAt  pgtype.Timestamptz
-	Params []byte
+	ID     int64
+	RunAt  time.Time
+	Params string
 }

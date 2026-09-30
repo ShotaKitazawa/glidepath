@@ -35,19 +35,35 @@ Single Go binary, server-rendered with `html/template` — no separate
 frontend build, no npm. This is a deliberate choice (SPEC.md §7) to minimize
 supply-chain attack surface; don't introduce a JS build pipeline or React.
 
-### DB (sqlc + goose)
+### DB (SQLite via modernc.org/sqlite, sqlc + goose)
+The DB is SQLite (`modernc.org/sqlite`, a pure-Go/cgo-free driver — keeps
+`cmd/server`'s `CGO_ENABLED=0` distroless build unchanged) accessed on a
+single PVC-backed file in production, no separate DB pod. Migrated from
+Postgres 2026-09 once this was a single-owner personal app with no
+concurrent-writer or DB-operator need — see `manifests-overcloud`'s sibling
+app `kondate` for the same PVC-file pattern. `DATABASE_URL` is a
+`modernc.org/sqlite` DSN, in practice just a file path.
+
 `internal/database/migrations/*.sql` (goose-formatted: `-- +goose Up` /
-`-- +goose Down`) and `internal/database/query.sql` are the single source of
-truth for the DB layer. sqlc reads the migrations directory directly and
-ignores Down sections. Workflow:
+`-- +goose Down`, SQLite dialect) and `internal/database/query.sql` (`?`
+positional placeholders, not `$1`) are the single source of truth for the
+DB layer. sqlc reads the migrations directory directly and ignores Down
+sections. Workflow:
 1. Add a new numbered file under `migrations/` (or edit `query.sql`)
 2. `mise run generate` (sqlc) and `mise run db-migrate` (goose, applies to
    `$DATABASE_URL`)
 
-**Never edit `internal/database/sqlcgen/` by hand.** goose itself is a
-dev-time tool only (`hack/tools.go`, `go run`) — it is not imported into
-`cmd/server`, so applying migrations is an explicit step, not automatic on
-app boot.
+**Never edit `internal/database/sqlcgen/` by hand** — and after any
+`mise run generate`, check for files sqlc no longer writes but didn't
+delete either (e.g. a stale `copyfrom.go` left behind when a `:copyfrom`
+query was converted away — sqlc only overwrites/creates, never prunes).
+goose itself is a dev-time tool only (`hack/tools.go`, `go run` /
+`mise run db-migrate`) — it is not imported into `cmd/server`, so applying
+migrations is an explicit step, not automatic on app boot. The app code
+(`cmd/server`, `internal/handler`) always talks to the DB through
+`database/sql` + generated `sqlcgen` types (`int64` IDs, `time.Time`
+dates, `sql.Null*` for nullable columns) — never a Postgres-specific type
+like `pgtype.*`.
 
 ## Commands
 All commands run via `mise run <task>`. Do not invoke `go` directly for
@@ -104,50 +120,29 @@ new fund to backfill its full history from inception.
 
 ## Running locally
 ```
-mise run dev      # starts Postgres, applies pending migrations, then Air
+mise run dev      # migrates ./glidepath-dev.db in place, then Air
                    # hot-reload + --disable-oidc on http://localhost:8080
 ```
-`dev` runs `db-up` as its first step, so a fresh checkout needs nothing
-else. `mise run db-down` stops the DB; `mise run db-reset` wipes and
-recreates it (fresh volume) then re-migrates.
-
-`db-up`/`db-down`/`db-reset` run `tools/devdb` (`go run ./tools/devdb ...`),
-a small first-party CLI — not shell script + `docker compose`. Reasons:
-- `docker-compose.yml` (the `db` service) stays the single declarative
-  source of the dev DB's shape, but `docker compose` doesn't work with
-  Apple's native `container` CLI, and the only third-party compose-for-
-  `container` plugin (`container-compose`) is flagged by Homebrew as a
-  likely supply-chain compromise — not something to depend on given
-  SPEC.md §7's stance.
-- `tools/devdb` parses `docker-compose.yml`'s `db` service with
-  `gopkg.in/yaml.v3` (already an indirect dependency via sqlc, so this adds
-  no new trust surface) and translates it into `docker`/`container run`
-  invocations — same code path for both engines, since their CLIs share
-  enough flag syntax (`-e`, `-p`, `-v`, `--name`) that no per-engine
-  branching is needed beyond the binary name. It prefers a reachable Docker
-  daemon (Docker Desktop, OrbStack, Colima, …) and falls back to `container`.
-- `PGDATA` is set to a subdirectory of the mount (`docker-compose.yml`),
-  not the volume's mount root — Apple's `container` formats named volumes
-  with a filesystem that pre-populates `lost+found`, which makes Postgres's
-  `initdb` refuse to use the mount root directly. Harmless on Docker.
-
-`DATABASE_URL` defaults to `docker-compose.yml`'s dev credentials via
-`mise.toml`'s `[env]`; override it if you're pointing at a different DB.
+No container/daemon of any kind — SQLite is just a file, so `dev` only
+needs `db-migrate` before starting Air. `mise run db-reset` deletes that
+file and re-migrates from scratch. `DATABASE_URL` defaults (via
+`mise.toml`'s `[env]`, using mise's `{{config_root}}`) to
+`./glidepath-dev.db`, gitignored; override it to point at a different file.
 
 ## Testing
-`mise run ci` (`go test ./...`) is pure unit tests — no DB required, nothing
-touches Postgres.
+`mise run ci` (`go test ./...`) is pure unit tests — no DB file required.
 
 `mise run test-integration` drives the real HTTP handlers against a real
-Postgres end to end (`internal/handler/integration_test.go`, build tag
-`integration`). It always targets `docker-compose.yml`'s **db-test**
-service — a second container/volume/port (15432), entirely separate from
-`db` (5432) — and resets it before every run. This is deliberate: earlier,
-manual verification against the shared dev DB (`db`) left stray rows behind
-and confused manual checking of the running app. Never point
-`test-integration` (or any of your own manual verification) at `db`;
-always use `db-test` or an ad hoc scratch container instead, and delete
-scratch containers when done — the dev DB a person is looking at in the
+SQLite file end to end (`internal/handler/integration_test.go`, build tag
+`integration`). It always targets `$TEST_DATABASE_URL`
+(`./glidepath-test.db`, gitignored) — a separate file from the dev DB
+(`$DATABASE_URL`, `./glidepath-dev.db`) — deleting and re-migrating it
+before every run. This is deliberate: earlier (back when the DB was
+Postgres), manual verification against the shared dev DB left stray rows
+behind and confused manual checking of the running app. Never point
+`test-integration` (or any of your own manual verification) at the dev DB
+file; always use the test file or an ad hoc scratch file instead, and
+delete scratch files when done — the dev DB a person is looking at in the
 browser must stay exactly what they put there.
 
 Excluded from integration tests: anything hitting the real MUFG API
