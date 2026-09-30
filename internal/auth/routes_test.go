@@ -70,19 +70,19 @@ func TestLogin_SetsFlowCookieAndRedirectsWithPKCE(t *testing.T) {
 	}
 }
 
-func TestCallback_MissingFlowCookieRejected(t *testing.T) {
+func TestCallback_MissingFlowCookieRestartsLogin(t *testing.T) {
 	m := newTestMiddlewareWithFlow()
 	req := httptest.NewRequest(http.MethodGet, "/callback?state=x&code=y", nil)
 	rec := httptest.NewRecorder()
 
 	m.callback(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/login" {
+		t.Errorf("status = %d, Location = %q, want %d redirecting to /login", rec.Code, rec.Header().Get("Location"), http.StatusFound)
 	}
 }
 
-func TestCallback_StateMismatchRejected(t *testing.T) {
+func TestCallback_StateMismatchRestartsLogin(t *testing.T) {
 	m := newTestMiddlewareWithFlow()
 	req := httptest.NewRequest(http.MethodGet, "/callback?state=wrong&code=y", nil)
 	req.AddCookie(&http.Cookie{Name: flowCookieName, Value: "expected-state|some-verifier"})
@@ -90,8 +90,8 @@ func TestCallback_StateMismatchRejected(t *testing.T) {
 
 	m.callback(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/login" {
+		t.Errorf("status = %d, Location = %q, want %d redirecting to /login", rec.Code, rec.Header().Get("Location"), http.StatusFound)
 	}
 }
 
